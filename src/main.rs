@@ -9,7 +9,7 @@ use macroquad::prelude::*;
 use network::{Message, Network};
 
 const BLUE: Color = Color::new(0.22, 0.65, 1., 1.);
-const RED: Color = Color::new(0.95, 0.20, 0.24, 1.);
+const RED: Color = Color::new(0.78, 0.40, 0.42, 1.);
 const ORANGE: Color = Color::new(1., 0.48, 0.23, 1.);
 fn conf() -> Conf {
     let phone_preview = std::env::args().any(|a| a.starts_with("--smoke-mobile"));
@@ -260,10 +260,12 @@ fn scene(
     }
     if g.setup > 0. {
         let x = if team == 0 { -7.5 } else { 7.5 };
-        draw_plane(vec3(x, 0.02, 0.), vec2(7.5, 9.), None, {
-            let color = if team == 0 { RED } else { BLUE };
-            Color::new(color.r, color.g, color.b, 0.12)
-        });
+        draw_plane(
+            vec3(x, 0.02, 0.),
+            vec2(7.5, 9.),
+            None,
+            Color::new(0.2, 0.5, 0.8, 0.12),
+        );
     }
     let white = Color::new(0.82, 0.92, 0.83, 1.);
     for (a, b) in [
