@@ -71,7 +71,7 @@ Nahraď názov skutočným súborom vypísaným build skriptom. APK možno tiež
 - Návrat do menu: tlačidlo **Menu** vpravo hore alebo Android Back. Počas rozostavenia je odpočet 5 sekúnd uprostred pod skóre, ďalej od okrajov a výrezu displeja; po jeho skončení zmizne. Tieto prvky sú prekryté nad ihriskom bez veľkých textových líšt.
 - Pri hostovaní sa uprostred zobrazuje lokálna IP adresa a port do pripojenia druhého hráča. Ak sa adresa nedá zistiť, hra vyzve na kontrolu Wi-Fi. Adresa zodpovedá aktívnemu sieťovému rozhraniu; pri VPN skontroluj, či sú obaja hráči v rovnakej sieti.
 - Klepnutie na IP adresu v menu otvorí systémovú klávesnicu. Prvý napísaný znak nahradí predvolenú adresu.
-- Pre multiplayer pripoj telefón a druhé zariadenie do rovnakej LAN/Wi-Fi. Na klientovi zadaj IP hostiteľa a port 7777. `127.0.0.1` označuje samotný telefón. TCP funguje aj medzi Androidom a desktopom.
+- Pre multiplayer pripoj telefón a druhé zariadenie do rovnakej LAN/Wi-Fi. Na klientovi zadaj IP hostiteľa a port 7777. `127.0.0.1` označuje samotný telefón. Stav hry ide cez UDP, pripojenie a príkazy cez TCP; oba protokoly fungujú aj medzi Androidom a desktopom. Firewall hostiteľa musí povoliť **TCP aj UDP port 7777**.
 - Súper a lopta používajú interpoláciu s približne 100 ms rezervou. Vlastní hráči a rozostavenie reagujú okamžite lokálnou predikciou; hostiteľ potvrdzuje príkazy a postupne koriguje prípadné rozdiely pozícií. Aktualizuj obe zariadenia na túto verziu.
 
 Modely a animácie sú vložené priamo do natívnej knižnice cez `include_bytes!`; APK nepotrebuje prístup k úložisku ani ďalšie stiahnutie assetov. Po zmene modelov spusti konverziu FBX a vytvor nový APK. Na mobile sa používa nižšie rozlíšenie vykresľovania a vypnuté MSAA pre nižšiu záťaž GPU.

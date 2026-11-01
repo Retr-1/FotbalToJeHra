@@ -29,9 +29,13 @@ Spúšťaj z koreňového priečinka projektu, aby hra našla `assets/`.
 - Lopta pod tlakom: stlačenie medzi hráčmi alebo medzi hráčom a mantinelom postupne zvyšuje pružnosť lopty a silu odrazu. Nahromadený tlak vytláča loptu cez najvoľnejšiu medzeru a zatlačí postavy späť. Po uvoľnení rýchlo klesá. Rýchlosť lopty je obmedzená na 18 jednotiek/s. Lopta sa nepresúva na iné miesto a hra sa neprerušuje. Súčasné kontakty sa sčítavajú, namiesto prepisovania posledným hráčom. Rohy sú zaoblené s polomerom 2,5 jednotky a odrážajú loptu podľa normály oblúka. Rovnaká hranica platí aj pre postavy a rozostavenie. Fyziku multiplayera vyhodnocuje hostiteľ.
 - **Escape** otvorí menu a ukončí sieťové spojenie. Nová hra vynuluje skóre.
 
-## Multiplayer cez TCP
+## Multiplayer cez TCP + UDP
 
-Hostiteľ posiela časované snímky stavu približne 30-krát za sekundu. Súper a lopta sa na klientovi vykresľujú interpoláciou s približne 100 ms rezervou. Vlastní hráči reagujú okamžite lokálnou predikciou pohybu, ktorá používa rovnakú logiku pohybu a kolízií postáv ako hostiteľ. Hostiteľ v snímkach potvrdzuje poradové čísla príkazov; staršie snímky preto neprepíšu nepotvrdený cieľ. Po potvrdení sa pozícia postupne zosúladí s hostiteľom, ktorý naďalej rozhoduje o fyzike lopty a skóre. Rozostavenie reaguje okamžite; zamietnuté umiestnenie opraví hostiteľ. Príkazy aj pripravené snímky sa odosielajú hneď, bez čakania na ďalší snímok vykresľovania. Neodoslané zastarané snímky sa nahrádzajú najnovšou bez zahodenia príkazov alebo rozpracovanej TCP správy. Pre túto verziu aktualizuj hostiteľa aj klienta.
+Hostiteľ posiela časované snímky stavu cez **UDP približne 30-krát za sekundu**. Každá obsahuje všetkých hráčov, loptu, skóre, fázu, číslo kola a potvrdenie posledného spracovaného príkazu. Binárny paket má pri 4 proti 4 iba 247 bajtov; stav sa nedelí do viacerých správ. Stratené stavy sa neopakujú ani nečakajú vo fronte. Poradové číslo umožňuje zahodiť staršie a duplicitné pakety.
+
+**TCP** slúži na pripojenie, dohodnutie náhodného identifikátora spojenia a spoľahlivé doručovanie očíslovaných príkazov. Klient zaregistruje svoju UDP adresu u hostiteľa; registrácia a potvrdenie sa pri strate opakujú. UDP pakety musia patriť aktuálnemu spojeniu a očakávanému odosielateľovi. Počas hry beží krátky kontrolný heartbeat; pri dlhšom výpadku sa spojenie ukončí s vysvetlením. Identifikátor spojenia nie je šifrovanie.
+
+Súper a lopta sa na klientovi vykresľujú interpoláciou s približne 100 ms rezervou. Vlastní hráči reagujú okamžite lokálnou predikciou s rovnakou logikou pohybu a kolízií postáv ako hostiteľ. Po potvrdení príkazu sa prípadný rozdiel pozície postupne opraví. Hostiteľ naďalej rozhoduje o fyzike lopty a skóre. **Aktualizuj hostiteľa aj klienta**; starý TCP protokol nie je kompatibilný.
 
 Pri vytvorení hry sa do pripojenia súpera zobrazuje lokálna IP adresa hostiteľa a port. Po pripojení zostáva skóre a tlačidlo Menu; počas päťsekundového rozostavenia sa zobrazuje aj odpočet. Ihrisko využíva celú dostupnú plochu bez horných a dolných textových líšt; kamera zachováva pomer strán a viditeľnosť oboch bránok.
 
@@ -49,7 +53,7 @@ Na druhom počítači (nahraď adresu IP hostiteľa):
 cargo run --release -- --join 192.168.1.10:7777
 ```
 
-Na jednom počítači otvor dve inštancie; klient použije `127.0.0.1:7777`. Pre LAN musí firewall hostiteľa povoliť prichádzajúci TCP port 7777. Cez internet potrebuje hostiteľ dostupnú verejnú adresu a presmerovaný port alebo spoločnú VPN; hra neobsahuje matchmaking ani relay server. Pripojenie je určené pre známych spoluhráčov a nie je šifrované.
+Na jednom počítači otvor dve inštancie; klient použije `127.0.0.1:7777`. Pre LAN musí firewall hostiteľa povoliť prichádzajúci port **7777 pre TCP aj UDP**. Oba protokoly používajú rovnaké číslo portu. Cez internet potrebuje hostiteľ dostupnú verejnú adresu a oba protokoly presmerované na rovnaký port, alebo spoločnú VPN; hra neobsahuje matchmaking ani relay server. Pripojenie je určené pre známych spoluhráčov a nie je šifrované.
 
 ## Modely
 

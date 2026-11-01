@@ -6,6 +6,7 @@ mod models;
 mod network;
 mod pointer;
 mod prediction;
+mod udp_packet;
 use game::*;
 use macroquad::prelude::*;
 use network::{Message, Network};
@@ -562,16 +563,11 @@ async fn main() {
             if let Some(n) = &mut net {
                 for m in n.poll() {
                     match m {
-                        Message::Input(c) if n.host => game.command(1, c),
                         Message::InputSequenced { sequence, command } if n.host => {
                             if sequence > last_input_sequence {
                                 game.command(1, command);
                                 last_input_sequence = sequence;
                             }
-                        }
-                        Message::State(g) if !n.host => {
-                            prediction.receive(g.clone(), 0, get_time());
-                            game = g;
                         }
                         Message::Snapshot { time, state, ack } if !n.host => {
                             prediction.receive(state.clone(), ack, get_time());
@@ -580,6 +576,14 @@ async fn main() {
                         _ => {}
                     }
                 }
+            }
+            if net.as_ref().is_some_and(|n| n.closed()) {
+                error = net.as_ref().unwrap().status.clone();
+                net = None;
+                menu = true;
+                selected = None;
+                next_frame().await;
+                continue;
             }
             if !authority {
                 if let Some(smoothed) = snapshots.render(get_frame_time().min(0.1) as f64) {
