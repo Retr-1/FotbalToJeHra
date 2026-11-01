@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::VecDeque,
     io::{self, Read, Write},
-    net::{TcpListener, TcpStream},
+    net::{SocketAddr, TcpListener, TcpStream, UdpSocket},
     time::Duration,
 };
 #[derive(Serialize, Deserialize)]
@@ -19,11 +19,28 @@ pub struct Network {
     offset: usize,
     pub status: String,
     pub host: bool,
+    pub host_address: Option<String>,
 }
 impl Network {
     pub fn host(address: &str) -> io::Result<Self> {
         let listener = TcpListener::bind(address)?;
         listener.set_nonblocking(true)?;
+        let bound = listener.local_addr()?;
+        let host_address = if !bound.ip().is_unspecified() {
+            Some(bound.to_string())
+        } else {
+            // UDP connect only selects the outgoing interface; no packet is sent.
+            (|| -> io::Result<String> {
+                let route = UdpSocket::bind("0.0.0.0:0")?;
+                route.connect("192.0.2.1:9")?;
+                let local = route.local_addr()?;
+                if local.ip().is_unspecified() || local.ip().is_loopback() {
+                    return Err(io::Error::other("LAN adresa nie je dostupna"));
+                }
+                Ok(SocketAddr::new(local.ip(), bound.port()).to_string())
+            })()
+            .ok()
+        };
         Ok(Self {
             listener: Some(listener),
             stream: None,
@@ -32,6 +49,7 @@ impl Network {
             offset: 0,
             status: format!("Cakam na hraca: {address}"),
             host: true,
+            host_address,
         })
     }
     pub fn join(address: &str) -> io::Result<Self> {
@@ -51,10 +69,14 @@ impl Network {
             offset: 0,
             status: "Pripojeny".into(),
             host: false,
+            host_address: None,
         })
     }
     pub fn connected(&self) -> bool {
         self.stream.is_some()
+    }
+    pub fn waiting(&self) -> bool {
+        self.host && self.listener.is_some() && !self.connected()
     }
     pub fn send(&mut self, m: Message) {
         if !self.connected() {
@@ -160,8 +182,14 @@ mod tests {
     fn tcp_round_trip() {
         let mut host = Network::host("127.0.0.1:0").unwrap();
         let address = host.listener.as_ref().unwrap().local_addr().unwrap();
+        assert_eq!(
+            host.host_address.as_deref(),
+            Some(address.to_string().as_str())
+        );
+        assert!(host.waiting());
         let mut client = Network::join(&address.to_string()).unwrap();
         host.poll();
+        assert!(!host.waiting());
         host.send(Message::State(Game::new()));
         host.poll();
         let deadline = std::time::Instant::now() + Duration::from_secs(2);

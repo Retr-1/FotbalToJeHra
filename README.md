@@ -31,6 +31,8 @@ Spúšťaj z koreňového priečinka projektu, aby hra našla `assets/`.
 
 ## Multiplayer cez TCP
 
+Pri vytvorení hry sa do pripojenia súpera zobrazuje lokálna IP adresa hostiteľa a port. Po pripojení zostáva iba skóre. Ihrisko využíva celú dostupnú plochu bez horných a dolných textových líšt; kamera zachováva pomer strán a viditeľnosť oboch bránok.
+
 Hostiteľ ovláda modrý tím, pripojený hráč oranžový. Fyziku, rozostavenie, čas a skóre počíta hostiteľ; klient posiela len príkazy pre svoj tím. Hra čaká na pripojenie druhého hráča. Po odpojení sa zastaví; nový zápas vytvor cez menu.
 
 Na prvom počítači:

@@ -543,13 +543,14 @@ async fn main() {
                 }
             }
             let ready = net.as_ref().is_none_or(|n| n.connected());
-            let height = 24_f32.max(36. * screen_height() / screen_width());
+            // Fit the complete pitch and both goals without reserving HUD bars.
+            let height = 16.8_f32.max(33.6 * screen_height() / screen_width());
             let cursor = ground_cursor(height, input.position);
             if selected_round != game.round {
                 selected = None;
                 selected_round = game.round;
             }
-            if ready && input.position.y > 110. * ui_scale() && input.pressed {
+            if ready && input.pressed {
                 selected = (team * COUNT..(team + 1) * COUNT)
                     .filter(|i| {
                         game.players[*i].pos.distance(cursor) < 0.9
@@ -614,77 +615,38 @@ async fn main() {
             }
             scene(&game, team, selected, cursor, &assets, &locomotion, height);
             ui_camera();
-            draw_rectangle(0., 0., ui_width(), 105., Color::from_hex(0x0b1721));
-            draw_text("FOTBAL / TO JE HRA", 24., 31., 23., WHITE);
-            if button(Rect::new(ui_width() - 120., 8., 105., 48.), "Menu", &input) {
-                menu = true;
-                net = None;
-                selected = None;
-            }
-            draw_text(
-                format!("X BOT   {}  :  {}   Y BOT", game.score[0], game.score[1]),
-                ui_width() / 2. - 150.,
-                39.,
-                32.,
-                WHITE,
-            );
-            let phase = if !ready {
-                "Cakam na pripojenie supera".into()
-            } else if game.setup > 0. {
-                format!("ROZOSTAVENIE  /  {} s", game.setup.ceil() as u32)
-            } else {
-                "HRA  /  potiahni hraca a pusti smer".into()
-            };
-            draw_text(
-                &phase,
-                24.,
-                66.,
-                23.,
-                if game.setup > 0. { YELLOW } else { GREEN },
-            );
-            draw_text(
-                format!(
-                    "Tvoj tim: {}",
-                    if team == 0 {
-                        "modry / X Bot"
-                    } else {
-                        "oranzovy / Y Bot"
-                    }
-                ),
-                24.,
-                91.,
-                18.,
-                LIGHTGRAY,
-            );
-            if let Some(n) = &net {
-                draw_text(&n.status, ui_width() - 390., 85., 18., LIGHTGRAY);
-            }
+            let score = format!("{}  :  {}", game.score[0], game.score[1]);
+            let score_width = measure_text(&score, None, 30, 1.).width;
             draw_rectangle(
-                0.,
-                ui_height() - 42.,
-                ui_width(),
-                42.,
-                Color::from_hex(0x0b1721),
+                ui_width() / 2. - score_width / 2. - 14.,
+                4.,
+                score_width + 28.,
+                38.,
+                Color::new(0.03, 0.08, 0.1, 0.75),
             );
-            draw_text(
-                if game.setup > 0. {
-                    "10 sekund: presun svojich hracov na vlastnej polovici. Potom sa hra spusti automaticky."
-                } else {
-                    "Podrz hraca, namier sipku a pusti. Hraci sa pohybuju sucasne. Kontakt s loptou = kop."
-                },
-                24.,
-                ui_height() - 15.,
-                19.,
-                LIGHTGRAY,
-            );
-            if game.goal_flash > 0. {
-                draw_text(
-                    "G O L !",
-                    ui_width() / 2. - 100.,
-                    ui_height() / 2.,
-                    64.,
-                    YELLOW,
-                );
+            draw_text(&score, ui_width() / 2. - score_width / 2., 32., 30., WHITE);
+            if let Some(n) = &net {
+                if n.waiting() {
+                    let address = n
+                        .host_address
+                        .as_deref()
+                        .unwrap_or("IP nedostupna - skontroluj Wi-Fi");
+                    let width = measure_text(address, None, 32, 1.).width;
+                    draw_rectangle(
+                        ui_width() / 2. - width / 2. - 24.,
+                        ui_height() / 2. - 34.,
+                        width + 48.,
+                        64.,
+                        Color::new(0.03, 0.08, 0.1, 0.92),
+                    );
+                    draw_text(
+                        address,
+                        ui_width() / 2. - width / 2.,
+                        ui_height() / 2. + 10.,
+                        32.,
+                        WHITE,
+                    );
+                }
             }
         }
         frames += 1;
