@@ -3,6 +3,36 @@ pub const W: f32 = 15.;
 pub const H: f32 = 9.;
 pub const GOAL: f32 = 2.7;
 pub const COUNT: usize = 5;
+pub const BALL_RADIUS: f32 = 0.32;
+pub const CORNER_RADIUS: f32 = 2.5;
+const MAX_BALL_SPEED: f32 = 18.;
+
+/// Project a circle inside the rounded pitch. Goals remain open for the ball.
+pub fn constrain_field(p: &mut Point, radius: f32, goals: bool) -> Option<Point> {
+    let old = *p;
+    p.y = p.y.clamp(-H + radius, H - radius);
+    if !goals || p.y.abs() >= GOAL - radius {
+        p.x = p.x.clamp(-W + radius, W - radius);
+    }
+    let cx = W - CORNER_RADIUS;
+    let cy = H - CORNER_RADIUS;
+    if p.x.abs() > cx && p.y.abs() > cy {
+        let dx = p.x.abs() - cx;
+        let dy = p.y.abs() - cy;
+        let d = dx.hypot(dy);
+        let limit = CORNER_RADIUS - radius;
+        if d > limit {
+            p.x = p.x.signum() * (cx + dx / d * limit);
+            p.y = p.y.signum() * (cy + dy / d * limit);
+        }
+    }
+    let d = old.distance(*p);
+    if d > 0.000001 {
+        Some(Point::new((p.x - old.x) / d, (p.y - old.y) / d))
+    } else {
+        None
+    }
+}
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Default)]
 pub struct Point {
     pub x: f32,
@@ -31,6 +61,7 @@ pub struct Game {
     pub setup: f32,
     pub goal_flash: f32,
     pub round: u32,
+    pub ball_pressure: f32,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Command {
@@ -48,6 +79,7 @@ impl Game {
             setup: 15.,
             goal_flash: 0.,
             round: 0,
+            ball_pressure: 0.,
         };
         g.reset();
         g
@@ -56,6 +88,7 @@ impl Game {
         self.round += 1;
         self.setup = 15.;
         self.ball = Point::default();
+        self.ball_pressure = 0.;
         self.velocity = Point::default();
         self.players.clear();
         for team in 0..2 {
@@ -91,6 +124,7 @@ impl Game {
             c.target.x.clamp(-W + 0.65, W - 0.65),
             c.target.y.clamp(-H + 0.65, H - 0.65),
         );
+        constrain_field(&mut t, 0.65, false);
         if self.setup > 0. {
             t.x = if team == 0 {
                 t.x.min(-0.7)
@@ -194,43 +228,127 @@ impl Game {
             }
         }
         for p in &mut self.players {
-            p.pos.x = p.pos.x.clamp(-14.4, 14.4);
-            p.pos.y = p.pos.y.clamp(-8.4, 8.4);
+            constrain_field(&mut p.pos, 0.6, false);
         }
         self.ball.x += self.velocity.x * dt;
         self.ball.y += self.velocity.y * dt;
-        for (i, p) in self.players.iter().enumerate() {
-            let d = p.pos.distance(self.ball);
-            if d < 0.92 {
-                let (dx, dy) = if d > 0.001 {
-                    ((self.ball.x - p.pos.x) / d, (self.ball.y - p.pos.y) / d)
-                } else {
-                    (p.facing.cos(), p.facing.sin())
-                };
-                self.ball = Point::new(p.pos.x + dx * 0.93, p.pos.y + dy * 0.93);
-                let dot = motion[i].x * dx + motion[i].y * dy;
-                let speed = if dot > 0.1 { 10.5 } else { 2. };
-                self.velocity = Point::new(dx * speed, dy * speed);
-            }
-        }
-        if self.ball.x.abs() > W + 0.3 && self.ball.y.abs() < GOAL - 0.3 {
+        self.solve_ball_contacts(&motion, dt);
+        if self.ball.x.abs() > W + BALL_RADIUS && self.ball.y.abs() < GOAL - BALL_RADIUS {
             let team = if self.ball.x > 0. { 0 } else { 1 };
             self.score[team] += 1;
             self.reset();
             self.goal_flash = 2.5;
             return;
         }
-        if self.ball.y.abs() > H - 0.3 {
-            self.ball.y = self.ball.y.clamp(-H + 0.3, H - 0.3);
-            self.velocity.y *= -0.8;
+        if let Some(n) = constrain_field(&mut self.ball, BALL_RADIUS, true) {
+            let incoming = self.velocity.x * n.x + self.velocity.y * n.y;
+            if incoming < 0. {
+                let restitution = 0.8 + self.ball_pressure * 0.6;
+                self.velocity.x -= (1. + restitution) * incoming * n.x;
+                self.velocity.y -= (1. + restitution) * incoming * n.y;
+            }
         }
-        if self.ball.x.abs() > W - 0.3 && self.ball.y.abs() >= GOAL - 0.3 {
-            self.ball.x = self.ball.x.clamp(-W + 0.3, W - 0.3);
-            self.velocity.x *= -0.8;
+        let speed = self.velocity.x.hypot(self.velocity.y);
+        if speed > MAX_BALL_SPEED {
+            self.velocity.x *= MAX_BALL_SPEED / speed;
+            self.velocity.y *= MAX_BALL_SPEED / speed;
         }
         let drag = (-0.65 * dt).exp();
         self.velocity.x *= drag;
         self.velocity.y *= drag;
+    }
+    fn solve_ball_contacts(&mut self, motion: &[Point], dt: f32) {
+        let mut contacts = vec![];
+        let mut normals = vec![];
+        let mut load = 0.;
+        let mut correction = Point::default();
+        for (i, p) in self.players.iter().enumerate() {
+            let d = p.pos.distance(self.ball);
+            if d < 0.98 {
+                let n = if d > 0.001 {
+                    Point::new((self.ball.x - p.pos.x) / d, (self.ball.y - p.pos.y) / d)
+                } else {
+                    Point::new(p.facing.cos(), p.facing.sin())
+                };
+                let drive = (motion[i].x * n.x + motion[i].y * n.y).max(0.);
+                load += drive + (0.92 - d).max(0.) * 20.;
+                normals.push(n);
+                contacts.push((i, n, drive));
+                let overlap = (0.92 - d).max(0.);
+                correction.x += n.x * overlap;
+                correction.y += n.y * overlap;
+            }
+        }
+        let mut probe = self.ball;
+        if let Some(n) = constrain_field(&mut probe, BALL_RADIUS + 0.06, true) {
+            normals.push(n);
+        }
+        let compressed = normals.iter().enumerate().any(|(i, a)| {
+            normals[i + 1..]
+                .iter()
+                .any(|b| a.x * b.x + a.y * b.y < -0.25)
+        });
+        if compressed && load > 0.1 {
+            self.ball_pressure = (self.ball_pressure + dt * (0.7 + load * 0.18)).min(1.);
+        } else {
+            self.ball_pressure *= (-dt * 6.).exp();
+        }
+        if !contacts.is_empty() {
+            let count = contacts.len() as f32;
+            // Simultaneous impulses: no player overwrites another player's kick.
+            let mut impulse = Point::default();
+            for &(_, n, drive) in &contacts {
+                let normal_speed = self.velocity.x * n.x + self.velocity.y * n.y;
+                let rebound = (-normal_speed).max(0.) * (0.75 + self.ball_pressure);
+                let kick: f32 = if drive > 0.1 { 10.5 } else { 2. };
+                let change = (kick.max(rebound) - normal_speed).max(0.) / count;
+                impulse.x += n.x * change;
+                impulse.y += n.y * change;
+            }
+            self.velocity.x += impulse.x;
+            self.velocity.y += impulse.y;
+            // Only resolve local overlap; never relocate the ball to a free spot.
+            self.ball.x += correction.x / count;
+            self.ball.y += correction.y / count;
+        }
+        if compressed && self.ball_pressure > 0.01 {
+            // A compressed ball squirts through the widest nearby gap. Looking
+            // a short distance ahead breaks perfectly symmetric opposed forces.
+            let mut best = Point::default();
+            let mut best_score = f32::NEG_INFINITY;
+            for i in 0..48 {
+                let angle = i as f32 * std::f32::consts::TAU / 48.;
+                let n = Point::new(angle.cos(), angle.sin());
+                let probe = Point::new(self.ball.x + n.x * 0.85, self.ball.y + n.y * 0.85);
+                let mut inside = probe;
+                constrain_field(&mut inside, BALL_RADIUS, true);
+                let clearance = self
+                    .players
+                    .iter()
+                    .map(|p| p.pos.distance(probe) - 0.92)
+                    .fold(2_f32, f32::min);
+                let toward_center = -(n.x * self.ball.x / W + n.y * self.ball.y / H);
+                let score = clearance - probe.distance(inside) * 8. + toward_center * 0.08;
+                if score > best_score {
+                    best_score = score;
+                    best = n;
+                }
+            }
+            // Stored compression supplies an outgoing collision impulse, not
+            // just acceleration that the next contact could cancel every step.
+            let outgoing = self.velocity.x * best.x + self.velocity.y * best.y;
+            let impulse = (16. * self.ball_pressure * self.ball_pressure - outgoing).max(0.);
+            self.velocity.x += best.x * impulse;
+            self.velocity.y += best.y * impulse;
+            // Players are not infinitely strong static walls: compression
+            // pushes their bodies back, opening a real gap for the ball.
+            let recoil = dt * 10. * self.ball_pressure * self.ball_pressure;
+            for &(i, n, _) in &contacts {
+                self.players[i].pos.x -= n.x * recoil;
+                self.players[i].pos.y -= n.y * recoil;
+                constrain_field(&mut self.players[i].pos, 0.6, false);
+            }
+        }
     }
 }
 #[cfg(test)]
@@ -350,5 +468,144 @@ mod tests {
             );
         }
         assert_eq!(g.players[0].pos.distance(old), 0.);
+    }
+    #[test]
+    fn compressed_ball_escapes_without_position_jump() {
+        for sign in [-1., 1.] {
+            let mut g = Game::new();
+            g.setup = 0.;
+            g.ball = Point::new(0., sign * (H - BALL_RADIUS));
+            g.players[0].pos = Point::new(-0.6, sign * 8.4);
+            g.players[5].pos = Point::new(0.6, sign * 8.4);
+            g.players[0].target = Point::new(1., sign * 8.35);
+            g.players[5].target = Point::new(-1., sign * 8.35);
+            let mut escaped = false;
+            let mut pressure = 0_f32;
+            for _ in 0..720 {
+                let old = g.ball;
+                g.tick(1. / 120.);
+                pressure = pressure.max(g.ball_pressure);
+                assert!(old.distance(g.ball) < 0.4, "no teleport");
+                if g.ball.y.abs() < H - 2. {
+                    escaped = true;
+                    break;
+                }
+            }
+            assert!(pressure > 0.);
+            assert!(
+                escaped,
+                "ball={:?} velocity={:?} pressure={}",
+                g.ball, g.velocity, g.ball_pressure
+            );
+            assert_eq!(g.score, [0, 0]);
+        }
+    }
+    #[test]
+    fn unattended_ball_does_not_gain_energy() {
+        let mut g = Game::new();
+        g.setup = 0.;
+        g.ball = Point::new(0., H - BALL_RADIUS);
+        let old = g.ball;
+        for _ in 0..600 {
+            g.tick(1. / 120.);
+        }
+        assert_eq!(g.ball.distance(old), 0.);
+        assert_eq!(g.ball_pressure, 0.);
+    }
+    #[test]
+    fn all_corners_deflect_diagonal_shots_inward() {
+        for sx in [-1., 1.] {
+            for sy in [-1., 1.] {
+                let mut g = Game::new();
+                g.setup = 0.;
+                g.ball = Point::new(sx * 13.5, sy * 7.5);
+                g.velocity = Point::new(sx * 10., sy * 10.);
+                for _ in 0..30 {
+                    g.tick(1. / 120.);
+                }
+                assert!(g.velocity.x * sx < 0. && g.velocity.y * sy < 0.);
+                let mut inside = g.ball;
+                assert!(constrain_field(&mut inside, BALL_RADIUS, true).is_none());
+            }
+        }
+    }
+    #[test]
+    fn corner_placement_is_inside_curved_boundary() {
+        let mut g = Game::new();
+        g.command(
+            0,
+            Command {
+                player: 0,
+                target: Point::new(-W, -H),
+                round: g.round,
+            },
+        );
+        let mut pos = g.players[0].pos;
+        assert!(constrain_field(&mut pos, 0.6, false).is_none());
+        assert!(g.players[0].pos.x > -14.35 && g.players[0].pos.y > -8.35);
+    }
+    #[test]
+    fn pressure_increases_rebound_and_dissipates_when_free() {
+        let mut low = Game::new();
+        low.ball = Point::default();
+        low.players[0].pos = Point::new(-0.9, 0.);
+        low.velocity = Point::new(-8., 0.);
+        let mut high = low.clone();
+        high.ball_pressure = 1.;
+        let motion = vec![Point::default(); COUNT * 2];
+        low.solve_ball_contacts(&motion, 1. / 120.);
+        high.solve_ball_contacts(&motion, 1. / 120.);
+        assert!(high.velocity.x > low.velocity.x);
+        high.ball = Point::new(0., 7.);
+        let before = high.ball_pressure;
+        high.solve_ball_contacts(&motion, 0.1);
+        assert!(high.ball_pressure < before);
+    }
+    #[test]
+    fn corner_squeezes_escape_with_bounded_speed() {
+        for sx in [-1., 1.] {
+            for sy in [-1., 1.] {
+                let mut g = Game::new();
+                g.setup = 0.;
+                let component = (CORNER_RADIUS - BALL_RADIUS) / 2_f32.sqrt();
+                g.ball = Point::new(
+                    sx * (W - CORNER_RADIUS + component),
+                    sy * (H - CORNER_RADIUS + component),
+                );
+                let start = g.ball;
+                g.players[0].pos = Point::new(start.x - sx * 0.85, start.y);
+                g.players[5].pos = Point::new(start.x, start.y - sy * 0.85);
+                for i in [0, 5] {
+                    constrain_field(&mut g.players[i].pos, 0.6, false);
+                    g.players[i].target = start;
+                }
+                let mut escaped = false;
+                for _ in 0..720 {
+                    let old = g.ball;
+                    g.tick(1. / 120.);
+                    assert!(g.velocity.x.hypot(g.velocity.y) <= MAX_BALL_SPEED + 0.001);
+                    assert!(old.distance(g.ball) < 0.4);
+                    if start.distance(g.ball) > 2. {
+                        escaped = true;
+                        break;
+                    }
+                }
+                assert!(escaped, "corner {sx}/{sy}: {:?}", g.ball);
+            }
+        }
+    }
+    #[test]
+    fn contact_order_does_not_favor_the_last_player() {
+        let mut a = Game::new();
+        a.ball = Point::default();
+        a.players[0].pos = Point::new(-0.7, 0.);
+        a.players[5].pos = Point::new(0.7, 0.);
+        let mut b = a.clone();
+        b.players.swap(0, 5);
+        let motion = vec![Point::default(); COUNT * 2];
+        a.solve_ball_contacts(&motion, 1. / 120.);
+        b.solve_ball_contacts(&motion, 1. / 120.);
+        assert!(a.ball.distance(b.ball) < 0.0001);
+        assert!(a.velocity.distance(b.velocity) < 0.0001);
     }
 }

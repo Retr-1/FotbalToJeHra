@@ -1,3 +1,4 @@
+mod ball_model;
 mod game;
 mod models;
 mod network;
@@ -147,12 +148,27 @@ fn fallback(p: &Player, c: Color, index: usize) {
         c,
     );
 }
+struct RenderAssets {
+    robots: [Option<models::Robot>; 2],
+    ball: Option<ball_model::BallModel>,
+}
+fn draw_triangle_3d(a: Vec3, b: Vec3, c: Vec3, color: Color) {
+    draw_mesh(&Mesh {
+        vertices: vec![
+            Vertex::new2(a, Vec2::ZERO, color),
+            Vertex::new2(b, Vec2::ZERO, color),
+            Vertex::new2(c, Vec2::ZERO, color),
+        ],
+        indices: vec![0, 1, 2],
+        texture: None,
+    });
+}
 fn scene(
     g: &Game,
     team: usize,
     selected: Option<usize>,
     cursor: Point,
-    robots: &[Option<models::Robot>; 2],
+    assets: &RenderAssets,
     locomotion: &[models::Locomotion],
     height: f32,
 ) {
@@ -181,13 +197,50 @@ fn scene(
     }
     let white = Color::new(0.82, 0.92, 0.83, 1.);
     for (a, b) in [
-        (Point::new(-W, -H), Point::new(W, -H)),
-        (Point::new(W, -H), Point::new(W, H)),
-        (Point::new(W, H), Point::new(-W, H)),
-        (Point::new(-W, H), Point::new(-W, -H)),
+        (
+            Point::new(-W + CORNER_RADIUS, -H),
+            Point::new(W - CORNER_RADIUS, -H),
+        ),
+        (
+            Point::new(W, -H + CORNER_RADIUS),
+            Point::new(W, H - CORNER_RADIUS),
+        ),
+        (
+            Point::new(W - CORNER_RADIUS, H),
+            Point::new(-W + CORNER_RADIUS, H),
+        ),
+        (
+            Point::new(-W, H - CORNER_RADIUS),
+            Point::new(-W, -H + CORNER_RADIUS),
+        ),
         (Point::new(0., -H), Point::new(0., H)),
     ] {
         line(a, b, white);
+    }
+    for sx in [-1., 1.] {
+        for sy in [-1., 1.] {
+            let center = Point::new(sx * (W - CORNER_RADIUS), sy * (H - CORNER_RADIUS));
+            for i in 0..32 {
+                let a = i as f32 * std::f32::consts::FRAC_PI_2 / 32.;
+                let b = (i + 1) as f32 * std::f32::consts::FRAC_PI_2 / 32.;
+                let p = Point::new(
+                    center.x + sx * CORNER_RADIUS * a.cos(),
+                    center.y + sy * CORNER_RADIUS * a.sin(),
+                );
+                let q = Point::new(
+                    center.x + sx * CORNER_RADIUS * b.cos(),
+                    center.y + sy * CORNER_RADIUS * b.sin(),
+                );
+                // Cover the rectangular turf outside the collision boundary.
+                draw_triangle_3d(
+                    vec3(sx * W, 0.03, sy * H),
+                    v(p, 0.03),
+                    v(q, 0.03),
+                    Color::from_hex(0x18392f),
+                );
+                line(p, q, white);
+            }
+        }
     }
     ring(Point::default(), 2.6, white);
     for sign in [-1., 1.] {
@@ -230,7 +283,7 @@ fn scene(
     for (i, p) in g.players.iter().enumerate() {
         let c = if i < COUNT { BLUE } else { ORANGE };
         ring(p.pos, 0.55, c);
-        if let Some(robot) = &robots[i / COUNT] {
+        if let Some(robot) = &assets.robots[i / COUNT] {
             let animation = &locomotion[i];
             robot.draw(
                 v(p.pos, 0.),
@@ -251,8 +304,11 @@ fn scene(
         arrow(g.players[i].pos, cursor, YELLOW);
         ring(cursor, 0.25, YELLOW);
     }
-    draw_sphere(v(g.ball, 0.32), 0.32, None, WHITE);
-    draw_cube(v(g.ball, 0.60), vec3(0.22, 0.05, 0.22), None, BLACK);
+    if let Some(ball) = &assets.ball {
+        ball.draw(v(g.ball, BALL_RADIUS));
+    } else {
+        draw_sphere(v(g.ball, BALL_RADIUS), BALL_RADIUS, None, WHITE);
+    }
     set_default_camera();
 }
 
@@ -270,6 +326,14 @@ async fn main() {
             None
         }
     });
+    let ball = match ball_model::BallModel::load("assets/models/ball.glb") {
+        Ok(ball) => Some(ball),
+        Err(e) => {
+            model_notes.push(format!("assets/models/ball.glb: {e}"));
+            None
+        }
+    };
+    let assets = RenderAssets { robots, ball };
     for note in &model_notes {
         eprintln!("{note}");
     }
@@ -372,7 +436,7 @@ async fn main() {
             draw_text(&error, x, y + 454., 19., ORANGE);
             if !model_notes.is_empty() {
                 draw_text(
-                    "Mixamo GLB chyba: pouzivaju sa nahradne roboty.",
+                    "Niektory model chyba: pouziva sa nahradna geometria.",
                     x,
                     y + 482.,
                     18.,
@@ -469,7 +533,7 @@ async fn main() {
                     state.blend = 1.;
                 }
             }
-            scene(&game, team, selected, cursor, &robots, &locomotion, height);
+            scene(&game, team, selected, cursor, &assets, &locomotion, height);
             draw_rectangle(0., 0., screen_width(), 105., Color::from_hex(0x0b1721));
             draw_text("FOTBAL / TO JE HRA", 24., 31., 23., WHITE);
             draw_text(

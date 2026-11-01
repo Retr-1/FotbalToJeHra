@@ -6,6 +6,7 @@
 - `models/Y Bot.fbx` → `generated/y_bot.glb`
 - `animations/Running.fbx` → `generated/running.glb`
 - `animations/Idle.fbx` → `generated/idle.glb`
+- `models/ball.glb` sa používa priamo, s pôvodnými farbami materiálov a mierkou prispôsobenou fyzikálnemu polomeru lopty.
 
 Konverzia: FBX2glTF 0.13.1 z https://github.com/godotengine/FBX2glTF/releases/tag/v0.13.1, bez Draco kompresie. Opakovanie: `tools/convert-assets.ps1`. Zdrojové FBX zostávajú nezmenené. Konvertor pri týchto FBX upozorňuje na odlišné pravidlá dedenia transformácií; výsledné modely aj beh sú overené importnými testami a grafickými náhľadmi.
 

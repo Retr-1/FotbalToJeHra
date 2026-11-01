@@ -24,6 +24,7 @@ Spúšťaj z koreňového priečinka projektu, aby hra našla `assets/`.
 - Po odpočítaní začne hra automaticky. Podrž ľavé tlačidlo na hráčovi, namier žltú šípku a pusti. Hráč ide k zvolenému miestu. Príkaz môžeš kedykoľvek zmeniť a postupne zadávať všetkým piatim hráčom; pohybujú sa súčasne.
 - Hráč pri kontakte kope do lopty podľa smeru kontaktu a pohybu. Lopta sa spomaľuje a odráža od hraníc ihriska mimo bránok.
 - Celá lopta za bránkovou čiarou znamená bod pre útočiaci tím. Lopta aj formácie sa vrátia na začiatok a znova plynie 15 sekúnd. Skóre zostáva.
+- Lopta pod tlakom: stlačenie medzi hráčmi alebo medzi hráčom a mantinelom postupne zvyšuje pružnosť lopty a silu odrazu. Nahromadený tlak vytláča loptu cez najvoľnejšiu medzeru a zatlačí postavy späť. Po uvoľnení rýchlo klesá. Rýchlosť lopty je obmedzená na 18 jednotiek/s. Lopta sa nepresúva na iné miesto a hra sa neprerušuje. Súčasné kontakty sa sčítavajú, namiesto prepisovania posledným hráčom. Rohy sú zaoblené s polomerom 2,5 jednotky a odrážajú loptu podľa normály oblúka. Rovnaká hranica platí aj pre postavy a rozostavenie. Fyziku multiplayera vyhodnocuje hostiteľ.
 - **Escape** otvorí menu a ukončí sieťové spojenie. Nová hra vynuluje skóre.
 
 ## Multiplayer cez TCP
@@ -45,6 +46,8 @@ cargo run --release -- --join 192.168.1.10:7777
 Na jednom počítači otvor dve inštancie; klient použije `127.0.0.1:7777`. Pre LAN musí firewall hostiteľa povoliť prichádzajúci TCP port 7777. Cez internet potrebuje hostiteľ dostupnú verejnú adresu a presmerovaný port alebo spoločnú VPN; hra neobsahuje matchmaking ani relay server. Pripojenie je určené pre známych spoluhráčov a nie je šifrované.
 
 ## Modely
+
+Lopta používa dodaný `assets/models/ball.glb`, vrátane pôvodných svetlých a čiernych panelov. Geometria sa automaticky vycentruje a zmenší na fyzikálny polomer 0,32 jednotky. Pri chýbajúcom modeli sa použije náhradná guľa.
 
 Pozri [assets/README.md](assets/README.md) pre zdroje. GLB modely sa načítajú pri štarte s kostrou a váhami vrcholov. Oba tímy používajú tvoje animácie `Idle.fbx` a `Running.fbx`, prevedené do GLB; na každého bota sa prenášajú podľa názvov kostí a rozdielov ich orientácie v základnej póze. Každá animácia má vlastnú referenčnú kostru, takže nevyžaduje rovnaké poradie kostí. Medzi státím a behom sa plynulo prelína podľa skutočnej rýchlosti hráča, aj pri sieťovej hre. Horizontálny posun animácie je odstránený, takže pozíciu a kolízie naďalej riadi hra. Počas rozostavenia sa prehráva státie. Ak súbor chýba alebo je poškodený, hra použije náhradného robota a vypíše príčinu do konzoly.
 
