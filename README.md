@@ -2,7 +2,7 @@
 
 **Android APK:** spusti Docker Desktop s Linux kontajnermi a potom `powershell -ExecutionPolicy Bypass -File .\build-android.ps1`, rovnako ako v RicochetRobots. Android SDK, NDK, Java aj Rust sa pripravia v kontajneri. Výsledok: `target/android-artifacts/release/apk/game.apk`. Podrobnosti sú v [android/README.md](android/README.md).
 
-3D taktický futbal v Ruste (Macroquad), 5 proti 5. Modrý tím používa Mixamo X Bot, oranžový Y Bot. Hra používa tvoje FBX modely a animácie prevedené do `assets/generated/`.
+3D taktický futbal v Ruste (Macroquad), 5 proti 5. Červený tím používa Mixamo X Bot, modrý Y Bot. Hra používa tvoje FBX modely a animácie prevedené do `assets/generated/`.
 
 ## Spustenie
 
@@ -33,7 +33,7 @@ Spúšťaj z koreňového priečinka projektu, aby hra našla `assets/`.
 
 Pri vytvorení hry sa do pripojenia súpera zobrazuje lokálna IP adresa hostiteľa a port. Po pripojení zostáva skóre a tlačidlo Menu; počas päťsekundového rozostavenia sa zobrazuje aj odpočet. Ihrisko využíva celú dostupnú plochu bez horných a dolných textových líšt; kamera zachováva pomer strán a viditeľnosť oboch bránok.
 
-Hostiteľ ovláda modrý tím, pripojený hráč oranžový. Fyziku, rozostavenie, čas a skóre počíta hostiteľ; klient posiela len príkazy pre svoj tím. Hra čaká na pripojenie druhého hráča. Po odpojení sa zastaví; nový zápas vytvor cez menu.
+Hostiteľ ovláda červený tím (X Bot), pripojený hráč modrý (Y Bot). Fyziku, rozostavenie, čas a skóre počíta hostiteľ; klient posiela len príkazy pre svoj tím. Hra čaká na pripojenie druhého hráča. Po odpojení sa zastaví; nový zápas vytvor cez menu.
 
 Na prvom počítači:
 
