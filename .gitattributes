@@ -1,0 +1,2 @@
+*.sh text eol=lf
+Dockerfile.android text eol=lf

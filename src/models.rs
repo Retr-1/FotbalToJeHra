@@ -173,13 +173,13 @@ struct AnimationSource {
 impl AnimationSource {
     fn load() -> Result<Self, String> {
         let (doc, buffers, _) =
-            gltf::import("assets/generated/running.glb").map_err(|e| e.to_string())?;
+            crate::asset_data::import("assets/generated/running.glb").map_err(|e| e.to_string())?;
         let run = doc
             .animations()
             .find(|a| a.channels().next().is_some())
             .ok_or("Model neobsahuje run animaciu")?;
         let (idle_doc, idle_buffers, _) =
-            gltf::import("assets/generated/idle.glb").map_err(|e| e.to_string())?;
+            crate::asset_data::import("assets/generated/idle.glb").map_err(|e| e.to_string())?;
         let idle = idle_doc
             .animations()
             .find(|a| a.channels().next().is_some())
@@ -218,7 +218,7 @@ pub struct Robot {
 }
 impl Robot {
     pub fn load(path: &str, color: Color) -> Result<Self, String> {
-        let (doc, buffers, _) = gltf::import(path).map_err(|e| e.to_string())?;
+        let (doc, buffers, _) = crate::asset_data::import(path).map_err(|e| e.to_string())?;
         let rig = Rig::read(&doc);
         // Each supplied FBX animation has its own reference skeleton.
         // Retarget world-space deltas independently before blending poses.

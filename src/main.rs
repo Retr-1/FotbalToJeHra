@@ -1,7 +1,9 @@
+mod asset_data;
 mod ball_model;
 mod game;
 mod models;
 mod network;
+mod pointer;
 use game::*;
 use macroquad::prelude::*;
 use network::{Message, Network};
@@ -9,12 +11,13 @@ use network::{Message, Network};
 const BLUE: Color = Color::new(0.22, 0.65, 1., 1.);
 const ORANGE: Color = Color::new(1., 0.48, 0.23, 1.);
 fn conf() -> Conf {
+    let phone_preview = std::env::args().any(|a| a.starts_with("--smoke-mobile"));
     Conf {
         window_title: "Fotbal To Je Hra".into(),
-        window_width: 1280,
-        window_height: 800,
-        high_dpi: true,
-        sample_count: 4,
+        window_width: if phone_preview { 960 } else { 1280 },
+        window_height: if phone_preview { 432 } else { 800 },
+        high_dpi: !cfg!(target_os = "android"),
+        sample_count: if cfg!(target_os = "android") { 1 } else { 4 },
         ..Default::default()
     }
 }
@@ -33,9 +36,9 @@ fn camera(height: f32) -> Camera3D {
         ..Default::default()
     }
 }
-fn ground_cursor(height: f32) -> Point {
+fn ground_cursor(height: f32, position: Vec2) -> Point {
     use macroquad::camera::Camera;
-    let (x, y) = mouse_position();
+    let (x, y) = (position.x, position.y);
     let ndc = vec2(x / screen_width() * 2. - 1., 1. - y / screen_height() * 2.);
     let inv = camera(height).matrix().inverse();
     let near = inv.project_point3(vec3(ndc.x, ndc.y, -1.));
@@ -44,15 +47,19 @@ fn ground_cursor(height: f32) -> Point {
     let hit = near + direction * (-near.y / direction.y);
     Point::new(hit.x, hit.z)
 }
-fn pick_distance(p: Point, height: f32) -> f32 {
+fn pick_distance(p: Point, height: f32, position: Vec2) -> f32 {
     use macroquad::camera::Camera;
     let projected = camera(height).matrix().project_point3(v(p, 0.85));
     let center = vec2(
         (projected.x + 1.) * 0.5 * screen_width(),
         (1. - projected.y) * 0.5 * screen_height(),
     );
-    let radius = 0.9 * screen_height() / height;
-    center.distance(Vec2::from(mouse_position())) / radius
+    let radius = (0.9 * screen_height() / height).max(if cfg!(target_os = "android") {
+        (screen_height() / 24.).clamp(22., 60.)
+    } else {
+        0.
+    });
+    center.distance(position) / radius
 }
 fn line(a: Point, b: Point, c: Color) {
     draw_line_3d(v(a, 0.04), v(b, 0.04), c);
@@ -82,8 +89,24 @@ fn arrow(a: Point, b: Point, c: Color) {
         );
     }
 }
-fn button(rect: Rect, text: &str) -> bool {
-    let hover = rect.contains(Vec2::from(mouse_position()));
+fn ui_scale() -> f32 {
+    (screen_width() / 1000.)
+        .min(screen_height() / 600.)
+        .min(1.5)
+}
+fn ui_width() -> f32 {
+    screen_width() / ui_scale()
+}
+fn ui_height() -> f32 {
+    screen_height() / ui_scale()
+}
+fn ui_camera() {
+    let mut camera = Camera2D::from_display_rect(Rect::new(0., 0., ui_width(), ui_height()));
+    camera.zoom.y = -camera.zoom.y;
+    set_camera(&camera);
+}
+fn button(rect: Rect, text: &str, input: &pointer::Pointer) -> bool {
+    let hover = rect.contains(input.position / ui_scale());
     draw_rectangle(
         rect.x,
         rect.y,
@@ -108,7 +131,7 @@ fn button(rect: Rect, text: &str) -> bool {
         },
     );
     draw_text(text, rect.x + 20., rect.y + rect.h / 2. + 8., 25., WHITE);
-    hover && is_mouse_button_pressed(MouseButton::Left)
+    hover && input.pressed
 }
 fn fallback(p: &Player, c: Color, index: usize) {
     let pos = v(p.pos, 0.);
@@ -338,6 +361,10 @@ fn scene(
 
 #[macroquad::main(conf)]
 async fn main() {
+    simulate_mouse_with_touch(false);
+    let mut input = pointer::Pointer::default();
+    let mut editing_address = false;
+    let mut replace_address = false;
     let mut model_notes = vec![];
     let robots = [
         ("assets/generated/x_bot.glb", BLUE),
@@ -378,10 +405,11 @@ async fn main() {
         a.strip_prefix("--smoke-run=")
             .and_then(|v| v.parse::<f32>().ok())
     });
-    let smoke = args.iter().any(|a| a == "--smoke-test") || run_preview.is_some();
+    let mobile_preview = args.iter().any(|a| a.starts_with("--smoke-mobile"));
+    let smoke = args.iter().any(|a| a == "--smoke-test") || run_preview.is_some() || mobile_preview;
     let mut frames = 0;
     if smoke {
-        menu = false;
+        menu = args.iter().any(|a| a == "--smoke-mobile-menu");
     }
     if let Some(mode) = args.get(1) {
         match mode.as_str() {
@@ -406,27 +434,49 @@ async fn main() {
         }
     }
     loop {
+        input.update();
         clear_background(Color::from_hex(0x0b1721));
-        if is_key_pressed(KeyCode::Escape) {
+        if is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::Back) {
+            miniquad::window::show_keyboard(false);
+            editing_address = false;
             menu = true;
             net = None;
             selected = None;
         }
         if menu {
-            let x = (screen_width() - 460.) / 2.;
-            let y = (screen_height() - 480.) / 2.;
+            ui_camera();
+            let x = (ui_width() - 460.) / 2.;
+            let y = (ui_height() - 480.) / 2.;
             draw_text("FOTBAL", x, y + 35., 56., WHITE);
             draw_text("TO JE HRA", x, y + 70., 26., BLUE);
             draw_text("Taktika. Pohyb. Gol.", x, y + 108., 22., GRAY);
-            let ai = button(Rect::new(x, y + 140., 460., 55.), "Hrat proti pocitacu");
+            let ai = button(
+                Rect::new(x, y + 140., 460., 55.),
+                "Hrat proti pocitacu",
+                &input,
+            );
             let host = button(
                 Rect::new(x, y + 208., 460., 55.),
                 "Vytvorit multiplayer (port 7777)",
+                &input,
             );
             draw_text("Adresa hostitela (IP:port):", x, y + 300., 20., LIGHTGRAY);
             draw_rectangle(x, y + 314., 460., 42., Color::from_hex(0x172b3c));
+            let address_rect = Rect::new(x, y + 314., 460., 42.);
+            if input.pressed && address_rect.contains(input.position / ui_scale()) {
+                editing_address = true;
+                replace_address = true;
+                miniquad::window::show_keyboard(true);
+            }
             while let Some(c) = get_char_pressed() {
-                if (c.is_ascii_alphanumeric() || ".:-[]".contains(c)) && address.len() < 100 {
+                if (editing_address || !cfg!(target_os = "android"))
+                    && (c.is_ascii_alphanumeric() || ".:-[]".contains(c))
+                    && address.len() < 100
+                {
+                    if replace_address {
+                        address.clear();
+                        replace_address = false;
+                    }
                     address.push(c);
                 }
             }
@@ -434,7 +484,15 @@ async fn main() {
                 address.pop();
             }
             draw_text(format!("{address}_"), x + 12., y + 342., 23., WHITE);
-            let join = button(Rect::new(x, y + 370., 460., 55.), "Pripojit sa k hracovi");
+            let join = button(
+                Rect::new(x, y + 370., 460., 55.),
+                "Pripojit sa k hracovi",
+                &input,
+            );
+            if ai || host || join {
+                editing_address = false;
+                miniquad::window::show_keyboard(false);
+            }
             if ai {
                 game = Game::new();
                 net = None;
@@ -486,17 +544,16 @@ async fn main() {
             }
             let ready = net.as_ref().is_none_or(|n| n.connected());
             let height = 24_f32.max(36. * screen_height() / screen_width());
-            let mouse = mouse_position();
-            let cursor = ground_cursor(height);
+            let cursor = ground_cursor(height, input.position);
             if selected_round != game.round {
                 selected = None;
                 selected_round = game.round;
             }
-            if ready && mouse.1 > 110. && is_mouse_button_pressed(MouseButton::Left) {
+            if ready && input.position.y > 110. * ui_scale() && input.pressed {
                 selected = (team * COUNT..(team + 1) * COUNT)
                     .filter(|i| {
                         game.players[*i].pos.distance(cursor) < 0.9
-                            || pick_distance(game.players[*i].pos, height) < 1.
+                            || pick_distance(game.players[*i].pos, height, input.position) < 1.
                     })
                     .min_by(|a, b| {
                         game.players[*a]
@@ -506,11 +563,9 @@ async fn main() {
                     });
             }
             if let Some(i) = selected {
-                if !ready {
+                if !ready || input.cancelled {
                     selected = None;
-                } else if (game.setup > 0. && is_mouse_button_down(MouseButton::Left))
-                    || is_mouse_button_released(MouseButton::Left)
-                {
+                } else if (game.setup > 0. && input.down) || input.released {
                     let c = Command {
                         player: i,
                         target: cursor,
@@ -522,7 +577,7 @@ async fn main() {
                         n.send(Message::Input(c))
                     }
                 }
-                if is_mouse_button_released(MouseButton::Left) {
+                if input.released {
                     selected = None;
                 }
             }
@@ -558,11 +613,17 @@ async fn main() {
                 }
             }
             scene(&game, team, selected, cursor, &assets, &locomotion, height);
-            draw_rectangle(0., 0., screen_width(), 105., Color::from_hex(0x0b1721));
+            ui_camera();
+            draw_rectangle(0., 0., ui_width(), 105., Color::from_hex(0x0b1721));
             draw_text("FOTBAL / TO JE HRA", 24., 31., 23., WHITE);
+            if button(Rect::new(ui_width() - 120., 8., 105., 48.), "Menu", &input) {
+                menu = true;
+                net = None;
+                selected = None;
+            }
             draw_text(
                 format!("X BOT   {}  :  {}   Y BOT", game.score[0], game.score[1]),
-                screen_width() / 2. - 150.,
+                ui_width() / 2. - 150.,
                 39.,
                 32.,
                 WHITE,
@@ -583,7 +644,7 @@ async fn main() {
             );
             draw_text(
                 format!(
-                    "Tvoj tim: {}   |   ESC: menu",
+                    "Tvoj tim: {}",
                     if team == 0 {
                         "modry / X Bot"
                     } else {
@@ -596,12 +657,12 @@ async fn main() {
                 LIGHTGRAY,
             );
             if let Some(n) = &net {
-                draw_text(&n.status, screen_width() - 390., 85., 18., LIGHTGRAY);
+                draw_text(&n.status, ui_width() - 390., 85., 18., LIGHTGRAY);
             }
             draw_rectangle(
                 0.,
-                screen_height() - 42.,
-                screen_width(),
+                ui_height() - 42.,
+                ui_width(),
                 42.,
                 Color::from_hex(0x0b1721),
             );
@@ -612,15 +673,15 @@ async fn main() {
                     "Podrz hraca, namier sipku a pusti. Hraci sa pohybuju sucasne. Kontakt s loptou = kop."
                 },
                 24.,
-                screen_height() - 15.,
+                ui_height() - 15.,
                 19.,
                 LIGHTGRAY,
             );
             if game.goal_flash > 0. {
                 draw_text(
                     "G O L !",
-                    screen_width() / 2. - 100.,
-                    screen_height() / 2.,
+                    ui_width() / 2. - 100.,
+                    ui_height() / 2.,
                     64.,
                     YELLOW,
                 );
@@ -628,7 +689,9 @@ async fn main() {
         }
         frames += 1;
         if smoke && frames == 8 {
-            get_screen_data().export_png(if run_preview.is_some() {
+            get_screen_data().export_png(if mobile_preview {
+                "smoke-mobile.png"
+            } else if run_preview.is_some() {
                 "smoke-run.png"
             } else {
                 "smoke-test.png"

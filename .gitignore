@@ -2,5 +2,6 @@
 /assets/*.fbx
 /smoke-test.png
 /smoke-run.png
+/smoke-mobile.png
 /tools/fbx2gltf/
 /tools/fbx2gltf.zip

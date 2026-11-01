@@ -1,0 +1,28 @@
+FROM rust:1.95.0-bookworm
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openjdk-17-jdk-headless unzip zip wget ca-certificates pkg-config libssl-dev cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV ANDROID_HOME=/opt/android-sdk
+ENV ANDROID_SDK_ROOT=/opt/android-sdk
+ENV NDK_HOME=/opt/android-sdk/ndk/28.2.13676358
+ENV PATH=/usr/lib/jvm/java-17-openjdk-amd64/bin:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:/opt/android-sdk/build-tools/36.0.0:${PATH}
+
+# Same command-line SDK archive used by RicochetRobots. Keep downloads inside
+# the cached image; the Windows host only needs Docker Desktop.
+RUN wget -q https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip -O /tmp/android-tools.zip \
+    && unzip -q /tmp/android-tools.zip -d /tmp/android-tools \
+    && mkdir -p /opt/android-sdk/cmdline-tools \
+    && mv /tmp/android-tools/cmdline-tools /opt/android-sdk/cmdline-tools/latest \
+    && rm -rf /tmp/android-tools /tmp/android-tools.zip
+RUN yes | sdkmanager --licenses > /dev/null \
+    && sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;28.2.13676358"
+
+# The packager embeds Cargo 0.95, so compile both it and the game with Rust 1.95.
+# The original RicochetRobots image has an older Rust unsuitable for these deps.
+RUN rustup target add aarch64-linux-android \
+    && cargo install --git https://github.com/hoklims/cargo-quad-apk --rev bdb61325ce1aecf09ed8969690f53c86c846c118 --locked cargo-quad-apk
+
+WORKDIR /root/src

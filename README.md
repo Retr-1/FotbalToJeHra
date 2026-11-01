@@ -1,5 +1,7 @@
 # Fotbal To Je Hra
 
+**Android APK:** spusti Docker Desktop s Linux kontajnermi a potom `powershell -ExecutionPolicy Bypass -File .\build-android.ps1`, rovnako ako v RicochetRobots. Android SDK, NDK, Java aj Rust sa pripravia v kontajneri. Výsledok: `target/android-artifacts/release/apk/game.apk`. Podrobnosti sú v [android/README.md](android/README.md).
+
 3D taktický futbal v Ruste (Macroquad), 5 proti 5. Modrý tím používa Mixamo X Bot, oranžový Y Bot. Hra používa tvoje FBX modely a animácie prevedené do `assets/generated/`.
 
 ## Spustenie

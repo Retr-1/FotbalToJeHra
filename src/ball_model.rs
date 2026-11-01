@@ -6,7 +6,7 @@ pub struct BallModel {
 }
 impl BallModel {
     pub fn load(path: &str) -> Result<Self, String> {
-        let (doc, buffers, _) = gltf::import(path).map_err(|e| e.to_string())?;
+        let (doc, buffers, _) = crate::asset_data::import(path).map_err(|e| e.to_string())?;
         fn visit(
             node: gltf::Node<'_>,
             parent: Mat4,
