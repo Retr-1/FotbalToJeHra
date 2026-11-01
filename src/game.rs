@@ -198,37 +198,10 @@ impl Game {
             );
         }
     }
-    pub fn tick(&mut self, dt: f32) {
-        if self.goal_flash > 0. {
-            let step = dt.min(self.goal_flash);
-            self.ball.x += self.velocity.x * step;
-            self.ball.y += self.velocity.y * step;
-            let sign = if self.scoring_team == Some(0) {
-                1.
-            } else {
-                -1.
-            };
-            let depth = self.ball.x * sign;
-            if !(W + BALL_RADIUS..=W + GOAL_DEPTH - BALL_RADIUS).contains(&depth) {
-                self.ball.x = sign * depth.clamp(W + BALL_RADIUS, W + GOAL_DEPTH - BALL_RADIUS);
-                self.velocity.x *= -0.35;
-            }
-            if self.ball.y.abs() > GOAL - BALL_RADIUS {
-                self.ball.y = self.ball.y.clamp(-GOAL + BALL_RADIUS, GOAL - BALL_RADIUS);
-                self.velocity.y *= -0.35;
-            }
-            let drag = (-3. * step).exp();
-            self.velocity.x *= drag;
-            self.velocity.y *= drag;
-            self.goal_flash = (self.goal_flash - dt).max(0.);
-            if self.goal_flash <= 0. {
-                self.reset();
-            }
-            return;
-        }
-        if self.setup > 0. {
-            self.setup = (self.setup - dt).max(0.);
-            return;
+    /// Shared deterministic movement for authoritative physics and local prediction.
+    pub fn advance_players(&mut self, dt: f32) -> Vec<Point> {
+        if self.setup > 0. || self.goal_flash > 0. {
+            return vec![Point::default(); self.players.len()];
         }
         let mut motion = vec![Point::default(); self.players.len()];
         for (i, p) in self.players.iter_mut().enumerate() {
@@ -265,6 +238,41 @@ impl Game {
         for p in &mut self.players {
             constrain_field(&mut p.pos, 0.6, false);
         }
+        motion
+    }
+    pub fn tick(&mut self, dt: f32) {
+        if self.goal_flash > 0. {
+            let step = dt.min(self.goal_flash);
+            self.ball.x += self.velocity.x * step;
+            self.ball.y += self.velocity.y * step;
+            let sign = if self.scoring_team == Some(0) {
+                1.
+            } else {
+                -1.
+            };
+            let depth = self.ball.x * sign;
+            if !(W + BALL_RADIUS..=W + GOAL_DEPTH - BALL_RADIUS).contains(&depth) {
+                self.ball.x = sign * depth.clamp(W + BALL_RADIUS, W + GOAL_DEPTH - BALL_RADIUS);
+                self.velocity.x *= -0.35;
+            }
+            if self.ball.y.abs() > GOAL - BALL_RADIUS {
+                self.ball.y = self.ball.y.clamp(-GOAL + BALL_RADIUS, GOAL - BALL_RADIUS);
+                self.velocity.y *= -0.35;
+            }
+            let drag = (-3. * step).exp();
+            self.velocity.x *= drag;
+            self.velocity.y *= drag;
+            self.goal_flash = (self.goal_flash - dt).max(0.);
+            if self.goal_flash <= 0. {
+                self.reset();
+            }
+            return;
+        }
+        if self.setup > 0. {
+            self.setup = (self.setup - dt).max(0.);
+            return;
+        }
+        let motion = self.advance_players(dt);
         self.ball.x += self.velocity.x * dt;
         self.ball.y += self.velocity.y * dt;
         self.solve_ball_contacts(&motion, dt);

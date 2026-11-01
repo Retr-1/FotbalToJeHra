@@ -1,9 +1,11 @@
 mod asset_data;
 mod ball_model;
 mod game;
+mod interpolation;
 mod models;
 mod network;
 mod pointer;
+mod prediction;
 use game::*;
 use macroquad::prelude::*;
 use network::{Message, Network};
@@ -410,6 +412,10 @@ async fn main() {
     let mut selected_round = 0;
     let mut accumulator = 0.;
     let mut send_timer = 0.;
+    let mut simulation_time = 0_f64;
+    let mut snapshots = interpolation::Interpolation::default();
+    let mut prediction = prediction::Prediction::default();
+    let mut last_input_sequence = 0_u64;
     let args: Vec<String> = std::env::args().collect();
     let run_preview = args.iter().find_map(|a| {
         a.strip_prefix("--smoke-run=")
@@ -461,6 +467,9 @@ async fn main() {
             selected = None;
         }
         if menu {
+            snapshots = interpolation::Interpolation::default();
+            prediction = prediction::Prediction::default();
+            last_input_sequence = 0;
             ui_camera();
             let x = (ui_width() - 460.) / 2.;
             let y = (ui_height() - 480.) / 2.;
@@ -554,12 +563,34 @@ async fn main() {
                 for m in n.poll() {
                     match m {
                         Message::Input(c) if n.host => game.command(1, c),
-                        Message::State(g) if !n.host => game = g,
+                        Message::InputSequenced { sequence, command } if n.host => {
+                            if sequence > last_input_sequence {
+                                game.command(1, command);
+                                last_input_sequence = sequence;
+                            }
+                        }
+                        Message::State(g) if !n.host => {
+                            prediction.receive(g.clone(), 0, get_time());
+                            game = g;
+                        }
+                        Message::Snapshot { time, state, ack } if !n.host => {
+                            prediction.receive(state.clone(), ack, get_time());
+                            snapshots.push(time, state);
+                        }
                         _ => {}
                     }
                 }
             }
-            let ready = net.as_ref().is_none_or(|n| n.connected());
+            if !authority {
+                if let Some(smoothed) = snapshots.render(get_frame_time().min(0.1) as f64) {
+                    game = smoothed;
+                }
+            }
+            if !authority {
+                prediction.apply(&mut game);
+            }
+            let ready =
+                net.as_ref().is_none_or(|n| n.connected()) && (authority || prediction.ready());
             // Fit the complete pitch and both goals without reserving HUD bars.
             let height = 16.8_f32.max(33.6 * screen_height() / screen_width());
             let cursor = ground_cursor(height, input.position);
@@ -600,7 +631,13 @@ async fn main() {
                     if authority {
                         game.command(team, c)
                     } else if let Some(n) = &mut net {
-                        n.send(Message::Input(c))
+                        if let Some(sequence) = prediction.command(c.clone(), get_time()) {
+                            n.send(Message::InputSequenced {
+                                sequence,
+                                command: c,
+                            });
+                            n.flush();
+                        }
                     }
                 }
                 if input.released {
@@ -614,17 +651,29 @@ async fn main() {
                         game.ai(1)
                     }
                     game.tick(1. / 120.);
+                    simulation_time += 1. / 120.;
                     accumulator -= 1. / 120.;
                 }
                 send_timer += get_frame_time();
                 if send_timer >= 1. / 30. {
                     if let Some(n) = &mut net {
-                        n.send(Message::State(game.clone()));
+                        n.send(Message::Snapshot {
+                            time: simulation_time,
+                            state: game.clone(),
+                            ack: last_input_sequence,
+                        });
                     }
-                    send_timer = 0.;
+                    if let Some(n) = &mut net {
+                        n.flush();
+                    }
+                    send_timer %= 1. / 30.;
                 }
             } else {
                 accumulator = 0.;
+            }
+            if !authority && ready {
+                prediction.update(get_frame_time().min(0.1));
+                prediction.apply(&mut game);
             }
             for (state, player) in locomotion.iter_mut().zip(&game.players) {
                 state.update(

@@ -9,13 +9,27 @@ use std::{
 #[derive(Serialize, Deserialize)]
 pub enum Message {
     State(Game),
+    Snapshot {
+        time: f64,
+        state: Game,
+        #[serde(default)]
+        ack: u64,
+    },
     Input(Command),
+    InputSequenced {
+        sequence: u64,
+        command: Command,
+    },
+}
+struct Pending {
+    bytes: Vec<u8>,
+    snapshot: bool,
 }
 pub struct Network {
     listener: Option<TcpListener>,
     stream: Option<TcpStream>,
     incoming: Vec<u8>,
-    outgoing: VecDeque<Vec<u8>>,
+    outgoing: VecDeque<Pending>,
     offset: usize,
     pub status: String,
     pub host: bool,
@@ -82,13 +96,23 @@ impl Network {
         if !self.connected() {
             return;
         }
+        let snapshot = matches!(&m, Message::State(_) | Message::Snapshot { .. });
+        if snapshot {
+            let partial = self.offset > 0;
+            let mut index = 0;
+            self.outgoing.retain(|p| {
+                let keep = !p.snapshot || (index == 0 && partial);
+                index += 1;
+                keep
+            });
+        }
         if self.outgoing.len() > 120 {
             self.disconnect("Pripojenie je prilis pomale");
             return;
         }
         if let Ok(mut bytes) = serde_json::to_vec(&m) {
             bytes.push(b'\n');
-            self.outgoing.push_back(bytes);
+            self.outgoing.push_back(Pending { bytes, snapshot });
         }
     }
     fn disconnect(&mut self, why: &str) {
@@ -148,7 +172,19 @@ impl Network {
                     }
                 }
             }
-            while let Some(bytes) = self.outgoing.front() {
+        }
+        if let Some(e) = failure {
+            self.disconnect(&e)
+        }
+        self.flush();
+        messages
+    }
+    /// Write queued input immediately, without consuming incoming messages.
+    pub fn flush(&mut self) {
+        let mut failure = None;
+        if let Some(s) = &mut self.stream {
+            while let Some(pending) = self.outgoing.front() {
+                let bytes = &pending.bytes;
                 match s.write(&bytes[self.offset..]) {
                     Ok(0) => {
                         failure = Some("Spojenie bolo uzavrete".into());
@@ -170,9 +206,8 @@ impl Network {
             }
         }
         if let Some(e) = failure {
-            self.disconnect(&e)
+            self.disconnect(&e);
         }
-        messages
     }
 }
 #[cfg(test)]
@@ -190,36 +225,103 @@ mod tests {
         let mut client = Network::join(&address.to_string()).unwrap();
         host.poll();
         assert!(!host.waiting());
-        host.send(Message::State(Game::new()));
+        host.send(Message::Snapshot {
+            time: 0.25,
+            state: Game::new(),
+            ack: 0,
+        });
         host.poll();
         let deadline = std::time::Instant::now() + Duration::from_secs(2);
         loop {
             if client
                 .poll()
                 .iter()
-                .any(|m| matches!(m,Message::State(g) if g.setup==crate::game::SETUP_SECONDS))
+                .any(|m| matches!(m,Message::Snapshot{time,state,..} if *time==0.25 && state.setup==crate::game::SETUP_SECONDS))
             {
                 break;
             }
             assert!(std::time::Instant::now() < deadline);
             std::thread::yield_now();
         }
-        client.send(Message::Input(Command {
-            player: crate::game::COUNT,
-            target: crate::game::Point::new(4., 2.),
-            round: 1,
-        }));
-        client.poll();
+        client.send(Message::InputSequenced {
+            sequence: 7,
+            command: Command {
+                player: crate::game::COUNT,
+                target: crate::game::Point::new(4., 2.),
+                round: 1,
+            },
+        });
+        client.flush();
         loop {
             if host
                 .poll()
                 .iter()
-                .any(|m| matches!(m,Message::Input(c) if c.player==crate::game::COUNT))
+                .any(|m| matches!(m,Message::InputSequenced{sequence,command} if *sequence==7 && command.player==crate::game::COUNT))
             {
                 break;
             }
             assert!(std::time::Instant::now() < deadline);
             std::thread::yield_now();
         }
+        host.send(Message::Snapshot {
+            time: 0.3,
+            state: Game::new(),
+            ack: 7,
+        });
+        host.flush();
+        loop {
+            if client
+                .poll()
+                .iter()
+                .any(|m| matches!(m, Message::Snapshot { ack: 7, .. }))
+            {
+                break;
+            }
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+    }
+    #[test]
+    fn queued_snapshots_are_coalesced_without_dropping_inputs_or_partial_frames() {
+        let mut host = Network::host("127.0.0.1:0").unwrap();
+        let address = host.listener.as_ref().unwrap().local_addr().unwrap();
+        let _client = Network::join(&address.to_string()).unwrap();
+        host.poll();
+        host.send(Message::Snapshot {
+            time: 1.,
+            state: Game::new(),
+            ack: 0,
+        });
+        host.send(Message::Input(Command {
+            player: 0,
+            target: crate::game::Point::default(),
+            round: 1,
+        }));
+        host.send(Message::Snapshot {
+            time: 2.,
+            state: Game::new(),
+            ack: 0,
+        });
+        assert_eq!(host.outgoing.len(), 2);
+        assert!(!host.outgoing[0].snapshot);
+        assert!(
+            matches!(serde_json::from_slice::<Message>(&host.outgoing[1].bytes).unwrap(),Message::Snapshot{time,..} if time==2.)
+        );
+        host.outgoing.clear();
+        host.send(Message::Snapshot {
+            time: 3.,
+            state: Game::new(),
+            ack: 0,
+        });
+        let partial = host.outgoing[0].bytes.clone();
+        host.offset = 7;
+        host.send(Message::Snapshot {
+            time: 4.,
+            state: Game::new(),
+            ack: 0,
+        });
+        assert_eq!(host.outgoing.len(), 2);
+        assert_eq!(host.offset, 7);
+        assert_eq!(host.outgoing[0].bytes, partial);
     }
 }

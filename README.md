@@ -31,6 +31,8 @@ Spúšťaj z koreňového priečinka projektu, aby hra našla `assets/`.
 
 ## Multiplayer cez TCP
 
+Hostiteľ posiela časované snímky stavu približne 30-krát za sekundu. Súper a lopta sa na klientovi vykresľujú interpoláciou s približne 100 ms rezervou. Vlastní hráči reagujú okamžite lokálnou predikciou pohybu, ktorá používa rovnakú logiku pohybu a kolízií postáv ako hostiteľ. Hostiteľ v snímkach potvrdzuje poradové čísla príkazov; staršie snímky preto neprepíšu nepotvrdený cieľ. Po potvrdení sa pozícia postupne zosúladí s hostiteľom, ktorý naďalej rozhoduje o fyzike lopty a skóre. Rozostavenie reaguje okamžite; zamietnuté umiestnenie opraví hostiteľ. Príkazy aj pripravené snímky sa odosielajú hneď, bez čakania na ďalší snímok vykresľovania. Neodoslané zastarané snímky sa nahrádzajú najnovšou bez zahodenia príkazov alebo rozpracovanej TCP správy. Pre túto verziu aktualizuj hostiteľa aj klienta.
+
 Pri vytvorení hry sa do pripojenia súpera zobrazuje lokálna IP adresa hostiteľa a port. Po pripojení zostáva skóre a tlačidlo Menu; počas päťsekundového rozostavenia sa zobrazuje aj odpočet. Ihrisko využíva celú dostupnú plochu bez horných a dolných textových líšt; kamera zachováva pomer strán a viditeľnosť oboch bránok.
 
 Hostiteľ ovláda červený tím (X Bot), pripojený hráč modrý (Y Bot). Fyziku, rozostavenie, čas a skóre počíta hostiteľ; klient posiela len príkazy pre svoj tím. Hra čaká na pripojenie druhého hráča. Po odpojení sa zastaví; nový zápas vytvor cez menu.
