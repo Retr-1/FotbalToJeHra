@@ -1,6 +1,6 @@
 # Fotbal To Je Hra
 
-3D taktický futbal v Ruste (Macroquad), 5 proti 5. Modrý tím používa Mixamo X Bot, oranžový Y Bot. Modely sú súčasťou `assets/`.
+3D taktický futbal v Ruste (Macroquad), 5 proti 5. Modrý tím používa Mixamo X Bot, oranžový Y Bot. Hra používa tvoje FBX modely a animácie prevedené do `assets/generated/`.
 
 ## Spustenie
 
@@ -46,9 +46,9 @@ Na jednom počítači otvor dve inštancie; klient použije `127.0.0.1:7777`. Pr
 
 ## Modely
 
-Pozri [assets/README.md](assets/README.md) pre zdroje. GLB modely sa načítajú pri štarte a zobrazujú sa v základnej póze, s tímovým sfarbením a otáčaním podľa smeru pohybu. Skeletálne animácie z GLB sa zatiaľ neprehrávajú. Ak súbor chýba alebo je poškodený, hra použije náhradného robota a vypíše príčinu do konzoly.
+Pozri [assets/README.md](assets/README.md) pre zdroje. GLB modely sa načítajú pri štarte s kostrou a váhami vrcholov. Oba tímy používajú tvoje animácie `Idle.fbx` a `Running.fbx`, prevedené do GLB; na každého bota sa prenášajú podľa názvov kostí a rozdielov ich orientácie v základnej póze. Každá animácia má vlastnú referenčnú kostru, takže nevyžaduje rovnaké poradie kostí. Medzi státím a behom sa plynulo prelína podľa skutočnej rýchlosti hráča, aj pri sieťovej hre. Horizontálny posun animácie je odstránený, takže pozíciu a kolízie naďalej riadi hra. Počas rozostavenia sa prehráva státie. Ak súbor chýba alebo je poškodený, hra použije náhradného robota a vypíše príčinu do konzoly.
 
-Vlastné exporty nahraď v `assets/x_bot.glb` a `assets/y_bot.glb`. FBX z Mixamo najprv importuj do Blenderu a exportuj ako GLB s geometriou postavy, bez Draco kompresie, os Y nahor. Importér zachová transformácie uzlov a automaticky upraví výšku na 1,8 hernej jednotky. Textúry a materiály nahrádza tímovým sfarbením.
+Po výmene FBX zdrojov spusti `powershell -ExecutionPolicy Bypass -File tools/convert-assets.ps1`. Skript používa FBX2glTF 0.13.1; vlastnú cestu možno zadať cez `-ConverterPath`. Vygenerované GLB sú pribalené, takže na bežné spustenie hry konvertor netreba. Importér zachová transformácie uzlov a automaticky upraví výšku na 1,8 hernej jednotky. Textúry a materiály nahrádza tímovým sfarbením. Súbory Godot `.import`, `.anim` a `.res` ani ostatné modely z `assets/models/` hra zatiaľ nenačítava.
 
 ## Overenie
 
@@ -56,6 +56,7 @@ Vlastné exporty nahraď v `assets/x_bot.glb` a `assets/y_bot.glb`. FBX z Mixamo
 cargo test
 cargo clippy --all-targets -- -D warnings
 cargo run -- --smoke-test
+cargo run -- --smoke-run=0.2
 ```
 
-Testy overujú skórovanie, reset kola, obmedzenia rozostavenia, odmietnutie príkazov súpera a starého kola, pozastavenie lopty počas rozostavenia, TCP prenos a import oboch pribalených modelov. Grafický smoke test otvorí hru, uloží `smoke-test.png` a skončí; vyžaduje grafické prostredie.
+Testy overujú skórovanie, reset kola, obmedzenia rozostavenia, odmietnutie príkazov súpera a starého kola, pozastavenie lopty počas rozostavenia, TCP prenos, deformovanie oboch modelov animáciou behu, zachovanie pozície koreňa a prechod medzi státím a behom. Grafický smoke test otvorí hru, uloží `smoke-test.png` a skončí; vyžaduje grafické prostredie. `--smoke-run=0.2` uloží do `smoke-run.png` náhľad oboch tímov v čase 0,2 sekundy bežeckého klipu (bez zmeny pravidiel hry).

@@ -153,6 +153,7 @@ fn scene(
     selected: Option<usize>,
     cursor: Point,
     robots: &[Option<models::Robot>; 2],
+    locomotion: &[models::Locomotion],
     height: f32,
 ) {
     set_camera(&camera(height));
@@ -230,7 +231,14 @@ fn scene(
         let c = if i < COUNT { BLUE } else { ORANGE };
         ring(p.pos, 0.55, c);
         if let Some(robot) = &robots[i / COUNT] {
-            robot.draw(v(p.pos, 0.), p.facing)
+            let animation = &locomotion[i];
+            robot.draw(
+                v(p.pos, 0.),
+                p.facing,
+                animation.phase,
+                get_time() as f32 + i as f32 * 0.2,
+                animation.blend,
+            )
         } else {
             fallback(p, c, i)
         }
@@ -251,13 +259,15 @@ fn scene(
 #[macroquad::main(conf)]
 async fn main() {
     let mut model_notes = vec![];
-    let robots = [("assets/x_bot.glb", BLUE), ("assets/y_bot.glb", ORANGE)].map(|(path, c)| {
-        match models::Robot::load(path, c) {
-            Ok(m) => Some(m),
-            Err(e) => {
-                model_notes.push(format!("{path}: {e}"));
-                None
-            }
+    let robots = [
+        ("assets/generated/x_bot.glb", BLUE),
+        ("assets/generated/y_bot.glb", ORANGE),
+    ]
+    .map(|(path, c)| match models::Robot::load(path, c) {
+        Ok(m) => Some(m),
+        Err(e) => {
+            model_notes.push(format!("{path}: {e}"));
+            None
         }
     });
     for note in &model_notes {
@@ -269,11 +279,18 @@ async fn main() {
     let mut address = "127.0.0.1:7777".to_string();
     let mut error = String::new();
     let mut selected = None;
+    let mut locomotion: Vec<models::Locomotion> = (0..COUNT * 2)
+        .map(|_| models::Locomotion::default())
+        .collect();
     let mut selected_round = 0;
     let mut accumulator = 0.;
     let mut send_timer = 0.;
     let args: Vec<String> = std::env::args().collect();
-    let smoke = args.iter().any(|a| a == "--smoke-test");
+    let run_preview = args.iter().find_map(|a| {
+        a.strip_prefix("--smoke-run=")
+            .and_then(|v| v.parse::<f32>().ok())
+    });
+    let smoke = args.iter().any(|a| a == "--smoke-test") || run_preview.is_some();
     let mut frames = 0;
     if smoke {
         menu = false;
@@ -440,7 +457,19 @@ async fn main() {
             } else {
                 accumulator = 0.;
             }
-            scene(&game, team, selected, cursor, &robots, height);
+            for (state, player) in locomotion.iter_mut().zip(&game.players) {
+                state.update(
+                    v(player.pos, 0.),
+                    game.round,
+                    ready && game.setup <= 0.,
+                    get_frame_time().min(0.1),
+                );
+                if let Some(phase) = run_preview {
+                    state.phase = phase;
+                    state.blend = 1.;
+                }
+            }
+            scene(&game, team, selected, cursor, &robots, &locomotion, height);
             draw_rectangle(0., 0., screen_width(), 105., Color::from_hex(0x0b1721));
             draw_text("FOTBAL / TO JE HRA", 24., 31., 23., WHITE);
             draw_text(
@@ -511,7 +540,11 @@ async fn main() {
         }
         frames += 1;
         if smoke && frames == 8 {
-            get_screen_data().export_png("smoke-test.png");
+            get_screen_data().export_png(if run_preview.is_some() {
+                "smoke-run.png"
+            } else {
+                "smoke-test.png"
+            });
             break;
         }
         next_frame().await;

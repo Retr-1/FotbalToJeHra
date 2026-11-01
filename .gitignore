@@ -1,3 +1,6 @@
 /target/
 /assets/*.fbx
 /smoke-test.png
+/smoke-run.png
+/tools/fbx2gltf/
+/tools/fbx2gltf.zip
