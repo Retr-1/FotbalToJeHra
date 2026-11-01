@@ -22,16 +22,16 @@ Spúšťaj z koreňového priečinka projektu, aby hra našla `assets/`.
 
 ## Ovládanie a pravidlá
 
-- Na začiatku každého kola je **10 sekúnd** na rozostavenie. Ľavým tlačidlom potiahni svojich hráčov na ľubovoľné voľné miesto svojej polovice. Prekrývanie hráčov nie je povolené.
+- Na začiatku každého kola je **5 sekúnd** na rozostavenie. Ľavým tlačidlom potiahni svojich hráčov na ľubovoľné voľné miesto svojej polovice. Prekrývanie hráčov nie je povolené.
 - Po odpočítaní začne hra automaticky. Podrž ľavé tlačidlo na hráčovi, namier žltú šípku a pusti. Hráč ide k zvolenému miestu. Príkaz môžeš kedykoľvek zmeniť a postupne zadávať všetkým piatim hráčom; pohybujú sa súčasne.
 - Hráč pri kontakte kope do lopty podľa smeru kontaktu a pohybu. Lopta sa spomaľuje a odráža od hraníc ihriska mimo bránok.
-- Celá lopta za bránkovou čiarou znamená bod pre útočiaci tím. Lopta aj formácie sa vrátia na začiatok a znova plynie 10 sekúnd. Skóre zostáva.
+- Celá lopta za bránkovou čiarou znamená bod pre útočiaci tím. Lopta aj formácie sa vrátia na začiatok a znova plynie 5 sekúnd. Skóre zostáva.
 - Lopta pod tlakom: stlačenie medzi hráčmi alebo medzi hráčom a mantinelom postupne zvyšuje pružnosť lopty a silu odrazu. Nahromadený tlak vytláča loptu cez najvoľnejšiu medzeru a zatlačí postavy späť. Po uvoľnení rýchlo klesá. Rýchlosť lopty je obmedzená na 18 jednotiek/s. Lopta sa nepresúva na iné miesto a hra sa neprerušuje. Súčasné kontakty sa sčítavajú, namiesto prepisovania posledným hráčom. Rohy sú zaoblené s polomerom 2,5 jednotky a odrážajú loptu podľa normály oblúka. Rovnaká hranica platí aj pre postavy a rozostavenie. Fyziku multiplayera vyhodnocuje hostiteľ.
 - **Escape** otvorí menu a ukončí sieťové spojenie. Nová hra vynuluje skóre.
 
 ## Multiplayer cez TCP
 
-Pri vytvorení hry sa do pripojenia súpera zobrazuje lokálna IP adresa hostiteľa a port. Po pripojení zostáva iba skóre. Ihrisko využíva celú dostupnú plochu bez horných a dolných textových líšt; kamera zachováva pomer strán a viditeľnosť oboch bránok.
+Pri vytvorení hry sa do pripojenia súpera zobrazuje lokálna IP adresa hostiteľa a port. Po pripojení zostáva skóre a tlačidlo Menu; počas päťsekundového rozostavenia sa zobrazuje aj odpočet. Ihrisko využíva celú dostupnú plochu bez horných a dolných textových líšt; kamera zachováva pomer strán a viditeľnosť oboch bránok.
 
 Hostiteľ ovláda modrý tím, pripojený hráč oranžový. Fyziku, rozostavenie, čas a skóre počíta hostiteľ; klient posiela len príkazy pre svoj tím. Hra čaká na pripojenie druhého hráča. Po odpojení sa zastaví; nový zápas vytvor cez menu.
 

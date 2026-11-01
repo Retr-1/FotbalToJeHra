@@ -550,7 +550,8 @@ async fn main() {
                 selected = None;
                 selected_round = game.round;
             }
-            if ready && input.pressed {
+            let menu_rect = Rect::new(ui_width() - 120., 4., 105., 38.);
+            if ready && input.pressed && !menu_rect.contains(input.position / ui_scale()) {
                 selected = (team * COUNT..(team + 1) * COUNT)
                     .filter(|i| {
                         game.players[*i].pos.distance(cursor) < 0.9
@@ -625,6 +626,16 @@ async fn main() {
                 Color::new(0.03, 0.08, 0.1, 0.75),
             );
             draw_text(&score, ui_width() / 2. - score_width / 2., 32., 30., WHITE);
+            if ready && game.setup > 0. {
+                let countdown = format!("{} s", game.setup.ceil() as u32);
+                draw_rectangle(12., 4., 76., 38., Color::new(0.03, 0.08, 0.1, 0.75));
+                draw_text(&countdown, 24., 32., 30., YELLOW);
+            }
+            if button(menu_rect, "Menu", &input) {
+                menu = true;
+                net = None;
+                selected = None;
+            }
             if let Some(n) = &net {
                 if n.waiting() {
                     let address = n
