@@ -2,7 +2,7 @@
 
 **Android APK:** spusti Docker Desktop s Linux kontajnermi a potom `powershell -ExecutionPolicy Bypass -File .\build-android.ps1`, rovnako ako v RicochetRobots. Android SDK, NDK, Java aj Rust sa pripravia v kontajneri. Výsledok: `target/android-artifacts/release/apk/game.apk`. Podrobnosti sú v [android/README.md](android/README.md).
 
-3D taktický futbal v Ruste (Macroquad), 5 proti 5. Červený tím používa Mixamo X Bot, modrý Y Bot. Hra používa tvoje FBX modely a animácie prevedené do `assets/generated/`.
+3D taktický futbal v Ruste (Macroquad), 4 proti 4. Červený tím používa Mixamo X Bot, modrý Y Bot. Bránky majú šírku 8,4 hernej jednotky, takže traja obrancovia nepokryjú celý priestor pre loptu. Hra používa tvoje FBX modely a animácie prevedené do `assets/generated/`.
 
 ## Spustenie
 
@@ -23,7 +23,7 @@ Spúšťaj z koreňového priečinka projektu, aby hra našla `assets/`.
 ## Ovládanie a pravidlá
 
 - Na začiatku každého kola je **5 sekúnd** na rozostavenie. Ľavým tlačidlom potiahni svojich hráčov na ľubovoľné voľné miesto svojej polovice. Prekrývanie hráčov nie je povolené.
-- Po odpočítaní začne hra automaticky. Podrž ľavé tlačidlo na hráčovi, namier žltú šípku a pusti. Hráč ide k zvolenému miestu. Príkaz môžeš kedykoľvek zmeniť a postupne zadávať všetkým piatim hráčom; pohybujú sa súčasne.
+- Po odpočítaní začne hra automaticky. Podrž ľavé tlačidlo na hráčovi, namier žltú šípku a pusti. Hráč ide k zvolenému miestu. Príkaz môžeš kedykoľvek zmeniť a postupne zadávať všetkým štyrom hráčom; pohybujú sa súčasne.
 - Hráč pri kontakte kope do lopty podľa smeru kontaktu a pohybu. Lopta sa spomaľuje a odráža od hraníc ihriska mimo bránok.
 - Celá lopta za bránkovou čiarou znamená bod pre útočiaci tím. Lopta aj formácie sa vrátia na začiatok a znova plynie 5 sekúnd. Skóre zostáva.
 - Lopta pod tlakom: stlačenie medzi hráčmi alebo medzi hráčom a mantinelom postupne zvyšuje pružnosť lopty a silu odrazu. Nahromadený tlak vytláča loptu cez najvoľnejšiu medzeru a zatlačí postavy späť. Po uvoľnení rýchlo klesá. Rýchlosť lopty je obmedzená na 18 jednotiek/s. Lopta sa nepresúva na iné miesto a hra sa neprerušuje. Súčasné kontakty sa sčítavajú, namiesto prepisovania posledným hráčom. Rohy sú zaoblené s polomerom 2,5 jednotky a odrážajú loptu podľa normály oblúka. Rovnaká hranica platí aj pre postavy a rozostavenie. Fyziku multiplayera vyhodnocuje hostiteľ.

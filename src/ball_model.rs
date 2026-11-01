@@ -108,9 +108,7 @@ impl BallModel {
         }
         Ok(Self { meshes })
     }
-    pub fn draw(&self, pos: Vec3) {
-        let rotation = Quat::from_rotation_z(-pos.x / crate::game::BALL_RADIUS)
-            * Quat::from_rotation_x(pos.z / crate::game::BALL_RADIUS);
+    pub fn draw(&self, pos: Vec3, rotation: Quat) {
         unsafe {
             get_internal_gl()
                 .quad_gl
@@ -124,9 +122,72 @@ impl BallModel {
         }
     }
 }
+
+pub struct BallRolling {
+    previous: Option<Vec3>,
+    round: u32,
+    pub rotation: Quat,
+}
+impl Default for BallRolling {
+    fn default() -> Self {
+        Self {
+            previous: None,
+            round: 0,
+            rotation: Quat::IDENTITY,
+        }
+    }
+}
+impl BallRolling {
+    pub fn update(&mut self, position: Vec3, round: u32, active: bool) {
+        if self.round != round || !active || self.previous.is_none() {
+            self.previous = Some(position);
+            self.round = round;
+            self.rotation = Quat::IDENTITY;
+            return;
+        }
+        let delta = position - self.previous.unwrap();
+        self.previous = Some(position);
+        let travel = vec3(delta.x, 0., delta.z);
+        let distance = travel.length();
+        if distance > 0.000001 {
+            let axis = Vec3::Y.cross(travel) / distance;
+            // Rolling without slip: angle = distance / radius, applied about
+            // a world-space axis perpendicular to the actual movement.
+            self.rotation = (Quat::from_axis_angle(axis, distance / crate::game::BALL_RADIUS)
+                * self.rotation)
+                .normalize();
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rolling_follows_distance_reverses_and_stops() {
+        let mut rolling = BallRolling::default();
+        rolling.update(Vec3::ZERO, 1, true);
+        let step = crate::game::BALL_RADIUS * std::f32::consts::FRAC_PI_2;
+        rolling.update(Vec3::X * step, 1, true);
+        assert!((rolling.rotation * Vec3::Y).distance(Vec3::X) < 0.0001);
+        let orientation = rolling.rotation;
+        rolling.update(Vec3::X * step, 1, true);
+        assert_eq!(orientation, rolling.rotation);
+        rolling.update(Vec3::ZERO, 1, true);
+        assert!((rolling.rotation * Vec3::Y).distance(Vec3::Y) < 0.0001);
+    }
+    #[test]
+    fn turns_accumulate_about_world_axes_and_round_reset_does_not_spin() {
+        let mut rolling = BallRolling::default();
+        rolling.update(Vec3::ZERO, 1, true);
+        let step = crate::game::BALL_RADIUS * std::f32::consts::FRAC_PI_2;
+        rolling.update(Vec3::X * step, 1, true);
+        rolling.update((Vec3::X + Vec3::Z) * step, 1, true);
+        let expected = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)
+            * Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2);
+        assert!((rolling.rotation * Vec3::Z).distance(expected * Vec3::Z) < 0.0001);
+        rolling.update(Vec3::ZERO, 2, false);
+        assert_eq!(rolling.rotation, Quat::IDENTITY);
+    }
     #[test]
     fn supplied_ball_preserves_panels_and_matches_collision_radius() {
         let ball = BallModel::load("assets/models/ball.glb").unwrap();

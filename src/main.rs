@@ -175,6 +175,7 @@ fn fallback(p: &Player, c: Color, index: usize) {
 struct RenderAssets {
     robots: [Option<models::Robot>; 2],
     ball: Option<ball_model::BallModel>,
+    ball_rolling: ball_model::BallRolling,
 }
 fn draw_goal(sign: f32) {
     let front = sign * W;
@@ -353,7 +354,7 @@ fn scene(
         ring(cursor, 0.25, YELLOW);
     }
     if let Some(ball) = &assets.ball {
-        ball.draw(v(g.ball, BALL_RADIUS));
+        ball.draw(v(g.ball, BALL_RADIUS), assets.ball_rolling.rotation);
     } else {
         draw_sphere(v(g.ball, BALL_RADIUS), BALL_RADIUS, None, WHITE);
     }
@@ -385,7 +386,11 @@ async fn main() {
             None
         }
     };
-    let assets = RenderAssets { robots, ball };
+    let mut assets = RenderAssets {
+        robots,
+        ball,
+        ball_rolling: ball_model::BallRolling::default(),
+    };
     for note in &model_notes {
         eprintln!("{note}");
     }
@@ -615,6 +620,11 @@ async fn main() {
                     state.blend = 1.;
                 }
             }
+            assets.ball_rolling.update(
+                v(game.ball, BALL_RADIUS),
+                game.round,
+                ready && game.setup <= 0.,
+            );
             scene(&game, team, selected, cursor, &assets, &locomotion, height);
             ui_camera();
             let score = format!("{}  :  {}", game.score[0], game.score[1]);

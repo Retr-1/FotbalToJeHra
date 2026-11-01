@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 pub const W: f32 = 15.;
 pub const H: f32 = 9.;
-pub const GOAL: f32 = 2.7;
-pub const COUNT: usize = 5;
+pub const GOAL: f32 = 4.2;
+pub const COUNT: usize = 4;
 pub const BALL_RADIUS: f32 = 0.45;
 pub const SETUP_SECONDS: f32 = 5.;
 const CONTACT_RADIUS: f32 = 0.6 + BALL_RADIUS;
@@ -100,8 +100,7 @@ impl Game {
                     0 => (12., 0.),
                     1 => (8., -4.),
                     2 => (8., 4.),
-                    3 => (3.8, -2.5),
-                    _ => (3.8, 2.5),
+                    _ => (3.8, 0.),
                 };
                 let pos = Point::new(sign * x, y);
                 self.players.push(Player {
@@ -174,7 +173,7 @@ impl Game {
                     behind
                 }
             } else if i == start {
-                Point::new(-sign * 12.5, self.ball.y.clamp(-2.3, 2.3))
+                Point::new(-sign * 12.5, self.ball.y.clamp(-GOAL + 0.6, GOAL - 0.6))
             } else {
                 Point::new(
                     (self.ball.x - sign * 3. - sign * (i % 2) as f32 * 3.).clamp(-12., 12.),
@@ -372,25 +371,25 @@ mod tests {
     #[test]
     fn rejects_opponent_and_stale_commands() {
         let mut g = Game::new();
-        let old = g.players[5].pos;
+        let old = g.players[COUNT].pos;
         g.command(
             0,
             Command {
-                player: 5,
+                player: crate::game::COUNT,
                 target: Point::new(5., 5.),
                 round: g.round,
             },
         );
-        assert_eq!(g.players[5].pos.x, old.x);
+        assert_eq!(g.players[COUNT].pos.x, old.x);
         g.command(
             1,
             Command {
-                player: 5,
+                player: crate::game::COUNT,
                 target: Point::new(6., 6.),
                 round: g.round - 1,
             },
         );
-        assert_eq!(g.players[5].pos.x, old.x);
+        assert_eq!(g.players[COUNT].pos.x, old.x);
     }
     #[test]
     fn goal_scores_and_resets() {
@@ -435,6 +434,10 @@ mod tests {
     fn movement_command_causes_contact_kick() {
         let mut g = Game::new();
         g.setup = 0.;
+        for (i, p) in g.players.iter_mut().enumerate().skip(1) {
+            p.pos = Point::new(-12. + i as f32 * 3., 6.);
+            p.target = p.pos;
+        }
         g.players[0].pos = Point::new(-1.5, 0.);
         g.command(
             0,
@@ -450,6 +453,31 @@ mod tests {
         assert!(g.ball.x > 1.);
         assert!(g.velocity.x > 0.);
         assert_eq!(g.score, [0, 0]);
+    }
+    #[test]
+    fn teams_have_four_players_and_three_defenders_leave_a_scoring_lane() {
+        let mut g = Game::new();
+        assert_eq!(g.players.len(), 8);
+        assert_eq!(COUNT, 4);
+        g.setup = 0.;
+        for (i, y) in [-2.1, 0., 2.1].iter().enumerate() {
+            let p = &mut g.players[COUNT + i];
+            p.pos = Point::new(W - 0.6, *y);
+            p.target = p.pos;
+        }
+        g.ball = Point::new(12.5, 3.6);
+        g.velocity = Point::new(10., 0.);
+        for _ in 0..120 {
+            g.tick(1. / 120.);
+            if g.score[0] > 0 {
+                break;
+            }
+        }
+        assert_eq!(
+            g.score,
+            [1, 0],
+            "a ball-sized lane must remain beside three defenders"
+        );
     }
     #[test]
     fn rejects_invalid_and_overlapping_placement() {
@@ -478,9 +506,9 @@ mod tests {
             g.setup = 0.;
             g.ball = Point::new(0., sign * (H - BALL_RADIUS));
             g.players[0].pos = Point::new(-0.6, sign * 8.4);
-            g.players[5].pos = Point::new(0.6, sign * 8.4);
+            g.players[COUNT].pos = Point::new(0.6, sign * 8.4);
             g.players[0].target = Point::new(1., sign * 8.35);
-            g.players[5].target = Point::new(-1., sign * 8.35);
+            g.players[COUNT].target = Point::new(-1., sign * 8.35);
             let mut escaped = false;
             let mut pressure = 0_f32;
             for _ in 0..720 {
@@ -576,8 +604,8 @@ mod tests {
                 );
                 let start = g.ball;
                 g.players[0].pos = Point::new(start.x - sx * 0.85, start.y);
-                g.players[5].pos = Point::new(start.x, start.y - sy * 0.85);
-                for i in [0, 5] {
+                g.players[COUNT].pos = Point::new(start.x, start.y - sy * 0.85);
+                for i in [0, COUNT] {
                     constrain_field(&mut g.players[i].pos, 0.6, false);
                     g.players[i].target = start;
                 }
@@ -601,9 +629,9 @@ mod tests {
         let mut a = Game::new();
         a.ball = Point::default();
         a.players[0].pos = Point::new(-0.7, 0.);
-        a.players[5].pos = Point::new(0.7, 0.);
+        a.players[COUNT].pos = Point::new(0.7, 0.);
         let mut b = a.clone();
-        b.players.swap(0, 5);
+        b.players.swap(0, COUNT);
         let motion = vec![Point::default(); COUNT * 2];
         a.solve_ball_contacts(&motion, 1. / 120.);
         b.solve_ball_contacts(&motion, 1. / 120.);

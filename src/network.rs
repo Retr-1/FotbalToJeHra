@@ -205,7 +205,7 @@ mod tests {
             std::thread::yield_now();
         }
         client.send(Message::Input(Command {
-            player: 5,
+            player: crate::game::COUNT,
             target: crate::game::Point::new(4., 2.),
             round: 1,
         }));
@@ -214,7 +214,7 @@ mod tests {
             if host
                 .poll()
                 .iter()
-                .any(|m| matches!(m,Message::Input(c) if c.player==5))
+                .any(|m| matches!(m,Message::Input(c) if c.player==crate::game::COUNT))
             {
                 break;
             }
