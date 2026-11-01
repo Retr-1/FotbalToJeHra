@@ -179,7 +179,7 @@ struct RenderAssets {
 }
 fn draw_goal(sign: f32) {
     let front = sign * W;
-    let back = sign * (W + 1.5);
+    let back = sign * (W + GOAL_DEPTH);
     let post = GOAL + 0.07;
     let frame = Color::from_hex(0xe2e9ed);
     let net = Color::from_hex(0x728b8a);
@@ -342,7 +342,11 @@ fn scene(
         } else {
             fallback(p, c, i)
         }
-        if i / COUNT == team && g.setup <= 0. && p.pos.distance(p.target) > 0.2 {
+        if i / COUNT == team
+            && g.setup <= 0.
+            && g.goal_flash <= 0.
+            && p.pos.distance(p.target) > 0.2
+        {
             arrow(p.pos, p.target, Color::new(c.r, c.g, c.b, 0.45));
         }
     }
@@ -438,6 +442,13 @@ async fn main() {
             },
             _ => {}
         }
+    }
+    if args.iter().any(|a| a == "--smoke-mobile-goal") {
+        menu = false;
+        game.setup = 0.;
+        game.ball = Point::new(W + BALL_RADIUS + 0.01, 0.);
+        game.velocity = Point::new(6., 0.);
+        game.tick(1. / 120.);
     }
     loop {
         input.update();
@@ -557,7 +568,14 @@ async fn main() {
                 selected_round = game.round;
             }
             let menu_rect = Rect::new(ui_width() - 120., 4., 105., 38.);
-            if ready && input.pressed && !menu_rect.contains(input.position / ui_scale()) {
+            if game.goal_flash > 0. {
+                selected = None;
+            }
+            if ready
+                && game.goal_flash <= 0.
+                && input.pressed
+                && !menu_rect.contains(input.position / ui_scale())
+            {
                 selected = (team * COUNT..(team + 1) * COUNT)
                     .filter(|i| {
                         game.players[*i].pos.distance(cursor) < 0.9
@@ -612,7 +630,7 @@ async fn main() {
                 state.update(
                     v(player.pos, 0.),
                     game.round,
-                    ready && game.setup <= 0.,
+                    ready && game.setup <= 0. && game.goal_flash <= 0.,
                     get_frame_time().min(0.1),
                 );
                 if let Some(phase) = run_preview {
@@ -637,6 +655,17 @@ async fn main() {
                 Color::new(0.03, 0.08, 0.1, 0.75),
             );
             draw_text(&score, ui_width() / 2. - score_width / 2., 32., 30., WHITE);
+            if game.goal_flash > 0. {
+                let color = if game.scoring_team == Some(0) {
+                    RED
+                } else {
+                    BLUE
+                };
+                let width = measure_text("GOAL!", None, 90, 1.).width;
+                let x = (ui_width() - width) * 0.5;
+                let y = ui_height() * 0.5 + 30.;
+                draw_text("GOAL!", x, y, 90., color);
+            }
             if ready && game.setup > 0. {
                 let countdown = format!("{} s", game.setup.ceil() as u32);
                 draw_rectangle(12., 4., 76., 38., Color::new(0.03, 0.08, 0.1, 0.75));

@@ -5,6 +5,7 @@ pub const GOAL: f32 = 4.2;
 pub const COUNT: usize = 4;
 pub const BALL_RADIUS: f32 = 0.45;
 pub const SETUP_SECONDS: f32 = 5.;
+pub const GOAL_DEPTH: f32 = 1.5;
 const CONTACT_RADIUS: f32 = 0.6 + BALL_RADIUS;
 pub const CORNER_RADIUS: f32 = 2.5;
 const MAX_BALL_SPEED: f32 = 18.;
@@ -62,6 +63,7 @@ pub struct Game {
     pub score: [u32; 2],
     pub setup: f32,
     pub goal_flash: f32,
+    pub scoring_team: Option<usize>,
     pub round: u32,
     pub ball_pressure: f32,
 }
@@ -80,6 +82,7 @@ impl Game {
             score: [0, 0],
             setup: SETUP_SECONDS,
             goal_flash: 0.,
+            scoring_team: None,
             round: 0,
             ball_pressure: 0.,
         };
@@ -87,6 +90,8 @@ impl Game {
         g
     }
     fn reset(&mut self) {
+        self.goal_flash = 0.;
+        self.scoring_team = None;
         self.round += 1;
         self.setup = SETUP_SECONDS;
         self.ball = Point::default();
@@ -112,6 +117,9 @@ impl Game {
         }
     }
     pub fn command(&mut self, team: usize, c: Command) {
+        if self.goal_flash > 0. {
+            return;
+        }
         if team > 1
             || c.player >= self.players.len()
             || c.player / COUNT != team
@@ -145,7 +153,7 @@ impl Game {
         self.players[c.player].target = t;
     }
     pub fn ai(&mut self, team: usize) {
-        if self.setup > 0. {
+        if self.setup > 0. || self.goal_flash > 0. {
             return;
         }
         let start = team * COUNT;
@@ -191,7 +199,33 @@ impl Game {
         }
     }
     pub fn tick(&mut self, dt: f32) {
-        self.goal_flash = (self.goal_flash - dt).max(0.);
+        if self.goal_flash > 0. {
+            let step = dt.min(self.goal_flash);
+            self.ball.x += self.velocity.x * step;
+            self.ball.y += self.velocity.y * step;
+            let sign = if self.scoring_team == Some(0) {
+                1.
+            } else {
+                -1.
+            };
+            let depth = self.ball.x * sign;
+            if !(W + BALL_RADIUS..=W + GOAL_DEPTH - BALL_RADIUS).contains(&depth) {
+                self.ball.x = sign * depth.clamp(W + BALL_RADIUS, W + GOAL_DEPTH - BALL_RADIUS);
+                self.velocity.x *= -0.35;
+            }
+            if self.ball.y.abs() > GOAL - BALL_RADIUS {
+                self.ball.y = self.ball.y.clamp(-GOAL + BALL_RADIUS, GOAL - BALL_RADIUS);
+                self.velocity.y *= -0.35;
+            }
+            let drag = (-3. * step).exp();
+            self.velocity.x *= drag;
+            self.velocity.y *= drag;
+            self.goal_flash = (self.goal_flash - dt).max(0.);
+            if self.goal_flash <= 0. {
+                self.reset();
+            }
+            return;
+        }
         if self.setup > 0. {
             self.setup = (self.setup - dt).max(0.);
             return;
@@ -237,8 +271,8 @@ impl Game {
         if self.ball.x.abs() > W + BALL_RADIUS && self.ball.y.abs() < GOAL - BALL_RADIUS {
             let team = if self.ball.x > 0. { 0 } else { 1 };
             self.score[team] += 1;
-            self.reset();
-            self.goal_flash = 2.5;
+            self.scoring_team = Some(team);
+            self.goal_flash = 1.;
             return;
         }
         if let Some(n) = constrain_field(&mut self.ball, BALL_RADIUS, true) {
@@ -398,8 +432,43 @@ mod tests {
         g.ball = Point::new(W + BALL_RADIUS + 0.1, 0.);
         g.tick(1. / 120.);
         assert_eq!(g.score, [1, 0]);
+        assert_eq!(g.scoring_team, Some(0));
+        assert_eq!(g.setup, 0.);
+        assert_eq!(g.round, 1);
+        g.tick(1.01);
         assert_eq!(g.setup, SETUP_SECONDS);
         assert_eq!(g.round, 2);
+    }
+    #[test]
+    fn goal_keeps_ball_in_net_for_one_second_and_scores_only_once() {
+        let mut g = Game::new();
+        g.setup = 0.;
+        g.ball = Point::new(W + BALL_RADIUS + 0.01, 0.);
+        g.velocity = Point::new(6., 0.);
+        g.tick(1. / 120.);
+        let entered = g.ball.x;
+        let target = g.players[0].target;
+        g.command(
+            0,
+            Command {
+                player: 0,
+                target: Point::default(),
+                round: g.round,
+            },
+        );
+        assert_eq!(g.players[0].target.distance(target), 0.);
+        g.tick(0.1);
+        assert!(g.ball.x > entered);
+        assert!(g.ball.x <= W + GOAL_DEPTH - BALL_RADIUS);
+        g.tick(0.7);
+        assert_eq!(g.round, 1);
+        assert_eq!(g.setup, 0.);
+        assert_eq!(g.score, [1, 0]);
+        g.tick(0.21);
+        assert_eq!(g.round, 2);
+        assert_eq!(g.setup, SETUP_SECONDS);
+        assert_eq!(g.score, [1, 0]);
+        assert_eq!(g.scoring_team, None);
     }
     #[test]
     fn outside_goal_bounces() {
@@ -427,6 +496,8 @@ mod tests {
         g.ball = Point::new(-W - BALL_RADIUS - 0.1, 0.);
         g.tick(1. / 120.);
         assert_eq!(g.score, [3, 5]);
+        assert_eq!(g.scoring_team, Some(1));
+        g.tick(1.01);
         assert_eq!(g.ball.distance(Point::default()), 0.);
         assert_eq!(g.players.len(), COUNT * 2);
     }
