@@ -668,8 +668,27 @@ async fn main() {
             }
             if ready && game.setup > 0. {
                 let countdown = format!("{} s", game.setup.ceil() as u32);
-                draw_rectangle(12., 4., 76., 38., Color::new(0.03, 0.08, 0.1, 0.75));
-                draw_text(&countdown, 24., 32., 30., YELLOW);
+                let text = measure_text(&countdown, None, 30, 1.);
+                let rect = Rect::new(
+                    (ui_width() - text.width - 28.) * 0.5,
+                    48.,
+                    text.width + 28.,
+                    38.,
+                );
+                draw_rectangle(
+                    rect.x,
+                    rect.y,
+                    rect.w,
+                    rect.h,
+                    Color::new(0.03, 0.08, 0.1, 0.75),
+                );
+                draw_text(
+                    &countdown,
+                    rect.x + 14.,
+                    rect.y + (rect.h - text.height) * 0.5 + text.offset_y,
+                    30.,
+                    YELLOW,
+                );
             }
             if button(menu_rect, "Menu", &input) {
                 menu = true;

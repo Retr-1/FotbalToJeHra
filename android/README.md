@@ -68,7 +68,7 @@ Nahraď názov skutočným súborom vypísaným build skriptom. APK možno tiež
 
 - Jedným prstom chyť hráča a potiahni ho. Počas rozostavenia sa presúva priamo; počas hry pustenie prsta zadá smer pohybu.
 - Druhý prst nepreberie rozpracované ťahanie. Prerušený dotyk sa zruší bez zadania príkazu.
-- Návrat do menu: tlačidlo **Menu** vpravo hore alebo Android Back. Počas rozostavenia je vľavo hore odpočet 5 sekúnd; po jeho skončení zmizne. Skóre zostáva uprostred. Tieto prvky sú prekryté nad ihriskom bez veľkých textových líšt.
+- Návrat do menu: tlačidlo **Menu** vpravo hore alebo Android Back. Počas rozostavenia je odpočet 5 sekúnd uprostred pod skóre, ďalej od okrajov a výrezu displeja; po jeho skončení zmizne. Tieto prvky sú prekryté nad ihriskom bez veľkých textových líšt.
 - Pri hostovaní sa uprostred zobrazuje lokálna IP adresa a port do pripojenia druhého hráča. Ak sa adresa nedá zistiť, hra vyzve na kontrolu Wi-Fi. Adresa zodpovedá aktívnemu sieťovému rozhraniu; pri VPN skontroluj, či sú obaja hráči v rovnakej sieti.
 - Klepnutie na IP adresu v menu otvorí systémovú klávesnicu. Prvý napísaný znak nahradí predvolenú adresu.
 - Pre multiplayer pripoj telefón a druhé zariadenie do rovnakej LAN/Wi-Fi. Na klientovi zadaj IP hostiteľa a port 7777. `127.0.0.1` označuje samotný telefón. TCP funguje aj medzi Androidom a desktopom.
