@@ -169,7 +169,7 @@ mod tests {
             if client
                 .poll()
                 .iter()
-                .any(|m| matches!(m,Message::State(g) if g.setup==15.))
+                .any(|m| matches!(m,Message::State(g) if g.setup==crate::game::SETUP_SECONDS))
             {
                 break;
             }

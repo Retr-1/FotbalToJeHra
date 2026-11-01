@@ -3,7 +3,9 @@ pub const W: f32 = 15.;
 pub const H: f32 = 9.;
 pub const GOAL: f32 = 2.7;
 pub const COUNT: usize = 5;
-pub const BALL_RADIUS: f32 = 0.32;
+pub const BALL_RADIUS: f32 = 0.45;
+pub const SETUP_SECONDS: f32 = 10.;
+const CONTACT_RADIUS: f32 = 0.6 + BALL_RADIUS;
 pub const CORNER_RADIUS: f32 = 2.5;
 const MAX_BALL_SPEED: f32 = 18.;
 
@@ -76,7 +78,7 @@ impl Game {
             ball: Point::default(),
             velocity: Point::default(),
             score: [0, 0],
-            setup: 15.,
+            setup: SETUP_SECONDS,
             goal_flash: 0.,
             round: 0,
             ball_pressure: 0.,
@@ -86,7 +88,7 @@ impl Game {
     }
     fn reset(&mut self) {
         self.round += 1;
-        self.setup = 15.;
+        self.setup = SETUP_SECONDS;
         self.ball = Point::default();
         self.ball_pressure = 0.;
         self.velocity = Point::default();
@@ -264,17 +266,17 @@ impl Game {
         let mut correction = Point::default();
         for (i, p) in self.players.iter().enumerate() {
             let d = p.pos.distance(self.ball);
-            if d < 0.98 {
+            if d < CONTACT_RADIUS + 0.06 {
                 let n = if d > 0.001 {
                     Point::new((self.ball.x - p.pos.x) / d, (self.ball.y - p.pos.y) / d)
                 } else {
                     Point::new(p.facing.cos(), p.facing.sin())
                 };
                 let drive = (motion[i].x * n.x + motion[i].y * n.y).max(0.);
-                load += drive + (0.92 - d).max(0.) * 20.;
+                load += drive + (CONTACT_RADIUS - d).max(0.) * 20.;
                 normals.push(n);
                 contacts.push((i, n, drive));
-                let overlap = (0.92 - d).max(0.);
+                let overlap = (CONTACT_RADIUS - d).max(0.);
                 correction.x += n.x * overlap;
                 correction.y += n.y * overlap;
             }
@@ -325,7 +327,7 @@ impl Game {
                 let clearance = self
                     .players
                     .iter()
-                    .map(|p| p.pos.distance(probe) - 0.92)
+                    .map(|p| p.pos.distance(probe) - CONTACT_RADIUS)
                     .fold(2_f32, f32::min);
                 let toward_center = -(n.x * self.ball.x / W + n.y * self.ball.y / H);
                 let score = clearance - probe.distance(inside) * 8. + toward_center * 0.08;
@@ -394,10 +396,10 @@ mod tests {
     fn goal_scores_and_resets() {
         let mut g = Game::new();
         g.setup = 0.;
-        g.ball = Point::new(15.4, 0.);
+        g.ball = Point::new(W + BALL_RADIUS + 0.1, 0.);
         g.tick(1. / 120.);
         assert_eq!(g.score, [1, 0]);
-        assert_eq!(g.setup, 15.);
+        assert_eq!(g.setup, SETUP_SECONDS);
         assert_eq!(g.round, 2);
     }
     #[test]
@@ -416,14 +418,14 @@ mod tests {
         g.velocity.x = 5.;
         g.tick(1.);
         assert_eq!(g.ball.x, 0.);
-        assert_eq!(g.setup, 14.);
+        assert_eq!(g.setup, SETUP_SECONDS - 1.);
     }
     #[test]
     fn both_goals_preserve_existing_score() {
         let mut g = Game::new();
         g.score = [3, 4];
         g.setup = 0.;
-        g.ball = Point::new(-15.4, 0.);
+        g.ball = Point::new(-W - BALL_RADIUS - 0.1, 0.);
         g.tick(1. / 120.);
         assert_eq!(g.score, [3, 5]);
         assert_eq!(g.ball.distance(Point::default()), 0.);

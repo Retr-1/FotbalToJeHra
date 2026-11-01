@@ -152,6 +152,54 @@ struct RenderAssets {
     robots: [Option<models::Robot>; 2],
     ball: Option<ball_model::BallModel>,
 }
+fn draw_goal(sign: f32) {
+    let front = sign * W;
+    let back = sign * (W + 1.5);
+    let post = GOAL + 0.07;
+    let frame = Color::from_hex(0xe2e9ed);
+    let net = Color::from_hex(0x728b8a);
+    // All frame members and net panels share the same front/back planes.
+    for x in [front, back] {
+        for z in [-post, post] {
+            draw_cube(vec3(x, 1., z), vec3(0.14, 2.14, 0.14), None, frame);
+        }
+        draw_cube(
+            vec3(x, 2., 0.),
+            vec3(0.14, 0.14, 2. * (post + 0.07)),
+            None,
+            frame,
+        );
+    }
+    for z in [-post, post] {
+        for y in [0.07, 2.] {
+            draw_cube(
+                vec3((front + back) * 0.5, y, z),
+                vec3(1.5, 0.10, 0.10),
+                None,
+                frame,
+            );
+        }
+    }
+    for i in 0..=18 {
+        let z = -post + 2. * post * i as f32 / 18.;
+        draw_line_3d(vec3(back, 0.07, z), vec3(back, 2., z), net);
+        draw_line_3d(vec3(front, 2., z), vec3(back, 2., z), net);
+    }
+    for i in 0..=8 {
+        let y = 0.07 + (2. - 0.07) * i as f32 / 8.;
+        draw_line_3d(vec3(back, y, -post), vec3(back, y, post), net);
+        for z in [-post, post] {
+            draw_line_3d(vec3(front, y, z), vec3(back, y, z), net);
+        }
+    }
+    for i in 0..=6 {
+        let x = front + (back - front) * i as f32 / 6.;
+        for z in [-post, post] {
+            draw_line_3d(vec3(x, 0.07, z), vec3(x, 2., z), net);
+        }
+        draw_line_3d(vec3(x, 2., -post), vec3(x, 2., post), net);
+    }
+}
 fn draw_triangle_3d(a: Vec3, b: Vec3, c: Vec3, color: Color) {
     draw_mesh(&Mesh {
         vertices: vec![
@@ -252,33 +300,7 @@ fn scene(
             Point::new(sign * 10., 5.5),
             white,
         );
-        let c = if sign < 0. { BLUE } else { ORANGE };
-        for y in [-GOAL, GOAL] {
-            draw_cube(vec3(sign * W, 1., y), vec3(0.14, 2., 0.14), None, WHITE);
-            draw_line_3d(vec3(sign * W, 2., y), vec3(sign * 16.5, 2., y), c);
-            draw_line_3d(vec3(sign * 16.5, 0., y), vec3(sign * 16.5, 2., y), c);
-        }
-        draw_cube(
-            vec3(sign * W, 2., 0.),
-            vec3(0.14, 0.14, GOAL * 2.),
-            None,
-            WHITE,
-        );
-        for i in 0..12 {
-            let y = -GOAL + i as f32 * GOAL * 2. / 11.;
-            draw_line_3d(
-                vec3(sign * 16.5, 0., y),
-                vec3(sign * 16.5, 2., y),
-                Color::from_hex(0x63827d),
-            );
-        }
-        for h in [0., 0.5, 1., 1.5, 2.] {
-            draw_line_3d(
-                vec3(sign * 16.5, h, -GOAL),
-                vec3(sign * 16.5, h, GOAL),
-                Color::from_hex(0x63827d),
-            );
-        }
+        draw_goal(sign);
     }
     for (i, p) in g.players.iter().enumerate() {
         let c = if i < COUNT { BLUE } else { ORANGE };
@@ -301,7 +323,9 @@ fn scene(
     }
     if let Some(i) = selected {
         ring(g.players[i].pos, 0.78, YELLOW);
-        arrow(g.players[i].pos, cursor, YELLOW);
+        if g.setup <= 0. {
+            arrow(g.players[i].pos, cursor, YELLOW);
+        }
         ring(cursor, 0.25, YELLOW);
     }
     if let Some(ball) = &assets.ball {
@@ -583,7 +607,7 @@ async fn main() {
             );
             draw_text(
                 if game.setup > 0. {
-                    "15 sekund: presun svojich hracov na vlastnej polovici. Potom sa hra spusti automaticky."
+                    "10 sekund: presun svojich hracov na vlastnej polovici. Potom sa hra spusti automaticky."
                 } else {
                     "Podrz hraca, namier sipku a pusti. Hraci sa pohybuju sucasne. Kontakt s loptou = kop."
                 },
