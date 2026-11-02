@@ -626,7 +626,7 @@ async fn main() {
             if let Some(i) = selected {
                 if !ready || input.cancelled {
                     selected = None;
-                } else if (game.setup > 0. && input.down) || input.released {
+                } else if input.down || input.released {
                     let c = Command {
                         player: i,
                         target: cursor,

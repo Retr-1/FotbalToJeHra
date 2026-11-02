@@ -18,7 +18,7 @@ getrandom = "0.3"
 [package.metadata.android]
 package_name = "sk.fotbaltojehra.game"
 label = "Fotbal To Je Hra"
-version_code = 14
+version_code = 15
 android_version = 36
 target_sdk_version = 36
 min_sdk_version = 26
